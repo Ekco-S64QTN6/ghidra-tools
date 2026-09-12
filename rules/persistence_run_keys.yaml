@@ -1,0 +1,19 @@
+name: "Persistence via Registry Autostart"
+namespace: "persistence/registry-autostart"
+scope: "file"
+meta:
+  att&ck: "T1547.001"
+  mbc: "Persistence::Registry Run Keys [F0012]"
+  weight: 25
+  description: "Modifies autostart registry keys to persist across system reboots"
+features:
+  and:
+    - or:
+        - api: "RegSetValueExA"
+        - api: "RegSetValueExW"
+        - api: "RegCreateKeyExA"
+        - api: "RegCreateKeyExW"
+    - or:
+        - ioc: "CurrentVersion\\Run"
+        - ioc: "CurrentVersion\\RunOnce"
+        - ioc: "Software\\Microsoft\\Windows\\CurrentVersion"

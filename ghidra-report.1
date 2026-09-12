@@ -1,0 +1,86 @@
+.TH GHIDRA-REPORT 1 "September 2026" "ghidra-report v0.2.0" "User Commands"
+.SH NAME
+ghidra-report \- automated binary analysis, threat triage, and firmware carving toolkit powered by Ghidra
+.SH SYNOPSIS
+.B ghidra-report.sh
+[\fIBINARY_FILE\fR] [\fIOPTIONS\fR]
+.br
+.B ghidra-report.sh
+.B \-\s-1\-\s0batch
+[\fB\-j\fR \fIN\fR] [\fIOPTIONS\fR]
+.br
+.B ghidra-report.sh
+.B \-\s-1\-\s0watch
+[\fIOPTIONS\fR]
+.br
+.B ghidra-report.sh
+.B \-\s-1\-\s0diff
+\fIREPORT_A.json\fR \fIREPORT_B.json\fR
+.br
+.B ghidra-report.sh
+.B \-\s-1\-\s0carve
+\fIFIRMWARE_FILE\fR [\fIOUTPUT_DIR\fR]
+.br
+.B ghidra-report.sh
+.B \-\s-1\-\s0dashboard
+[\fIPORT\fR]
+.br
+.B ghidra-report.sh
+.B \-\s-1\-\s0search
+\fITERM\fR
+.SH DESCRIPTION
+.B ghidra-report
+is an automated headless analysis harness for Ghidra. It ingests compiled executables (PE, ELF, Mach-O), embedded firmware containers, and retro ROMs (Super Nintendo 65816), executing static analysis, Shannon entropy evaluation, shellcode stub detection, MITRE ATT&CK capability mapping, P-code emulation, and cross-reference tracing.
+.SH OPTIONS
+.TP
+.BI \-\s-1\-\s0format " <txt|json|md|html|sarif|yar|misp|all>"
+Select output report formats. Defaults to \fBall\fR (generates 7 artifacts).
+.TP
+.BI \-j ", " \-\s-1\-\s0parallel " [N]"
+Dispatch concurrent analysis workers across N CPU threads for batch jobs.
+.TP
+.BI \-\s-1\-\s0findcrypt
+Scan binary memory for 124+ cryptographic constants (AES, ChaCha, MD5, SHA-256, RC4, TEA, Blowfish) and tag discovered algorithms in Ghidra bookmarks.
+.TP
+.BI \-\s-1\-\s0detect-type " <FILE>"
+Inspect and print the auto-detected binary format (PE, ELF, GBA, N64, PSX, SNES, raw) without initiating a full project build.
+.TP
+.BI \-\s-1\-\s0webhook " <URL>"
+Send notification alerts upon analysis completion to Slack, Discord, or generic Webhooks.
+.TP
+.BI \-\s-1\-\s0carve " <FILE> [OUT_DIR]"
+Deep boundary scanner and carving pipeline for embedded firmware containers (SquashFS, CRAMFS, JFFS2, U-Boot uImage, GZIP, and embedded ELFs).
+.TP
+.BI \-\s-1\-\s0diff " <A.json> <B.json>"
+Semantic differential analysis comparing memory layouts, entropy shifts, and API findings lifecycle ([NEW], [ABSENT], [UPDATED], [UNCHANGED]).
+.TP
+.BI \-\s-1\-\s0dashboard " [PORT]"
+Launch the built-in dark-mode web dashboard on localhost (default: 8080).
+.TP
+.BI \-\s-1\-\s0search " <TERM>"
+Search the SQLite historical analysis database for strings, symbols, or MITRE ATT&CK indicators.
+.SH OUTPUT ARTIFACTS
+Each analyzed binary receives dedicated outputs in \fBoutput/<binary_name>/\fR:
+.IP \(bu 2
+.B report_latest.txt
+\- Full human-readable plain-text analysis report.
+.IP \(bu 2
+.B report_latest.json
+\- Complete structured metadata and machine-readable triage dictionary.
+.IP \(bu 2
+.B report_latest.md
+\- GitHub-flavored Markdown report with tables and alerts.
+.IP \(bu 2
+.B report_latest.html
+\- Responsive, dark-mode glassmorphic HTML dashboard report.
+.IP \(bu 2
+.B report_latest.sarif
+\- OASIS SARIF v2.1.0 JSON format for GitHub Code Scanning and CI/CD.
+.IP \(bu 2
+.B report_latest.yar
+\- Auto-generated YARA detection rule based on imports, sections, and hashes.
+.IP \(bu 2
+.B report_latest.misp.json
+\- MISP standard Threat Event JSON format for direct threat intel platform ingestion.
+.SH AUTHOR
+Google DeepMind Advanced Agentic Coding Pair Programmer.

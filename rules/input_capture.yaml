@@ -1,0 +1,14 @@
+name: "Input Capture via Keystroke Logging"
+namespace: "collection/keylogging"
+scope: "file"
+meta:
+  att&ck: "T1056.001"
+  mbc: "Collection::Keylogging [E1056]"
+  weight: 30
+  description: "Monitors keystrokes using polling or global Windows hooks"
+features:
+  or:
+    - api: "GetAsyncKeyState"
+    - api: "GetKeyState"
+    - api: "SetWindowsHookExA"
+    - api: "SetWindowsHookExW"

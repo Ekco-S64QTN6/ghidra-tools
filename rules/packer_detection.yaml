@@ -1,0 +1,13 @@
+name: "Packed Executable with Suspicious Section"
+namespace: "anti-analysis/packer"
+scope: "file"
+meta:
+  att&ck: "T1027.002"
+  mbc: "Anti-Static Analysis::Software Packing [B0027]"
+  weight: 30
+  description: "Binary contains high-entropy sections or dedicated packer stubs"
+features:
+  or:
+    - indicator: "High-entropy section"
+    - indicator: "RWX memory block detected"
+    - indicator: "GetPC"

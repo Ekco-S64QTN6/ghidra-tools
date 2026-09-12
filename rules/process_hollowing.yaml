@@ -1,0 +1,19 @@
+name: "Process Hollowing via Memory Unmapping"
+namespace: "defense-evasion/process-hollow"
+scope: "file"
+meta:
+  att&ck: "T1055.012"
+  mbc: "Defense Evasion::Process Hollowing [B0007]"
+  weight: 45
+  description: "Unmaps original image from target process, writes replacement payload, and updates thread context"
+features:
+  and:
+    - or:
+        - api: "NtUnmapViewOfSection"
+        - api: "ZwUnmapViewOfSection"
+    - or:
+        - api: "SetThreadContext"
+        - api: "NtSetContextThread"
+    - or:
+        - api: "ResumeThread"
+        - api: "NtResumeThread"

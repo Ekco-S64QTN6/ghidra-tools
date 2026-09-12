@@ -1,0 +1,16 @@
+name: "Cryptographic Routine or Cipher Constant"
+namespace: "cryptography/ciphers"
+scope: "file"
+meta:
+  att&ck: "T1027"
+  mbc: "Cryptography::Encrypt Data [C0027]"
+  weight: 20
+  description: "Binary contains cryptographic constants or cipher implementations"
+features:
+  or:
+    - indicator: "TEA_DELTA"
+    - indicator: "AES"
+    - indicator: "ChaCha"
+    - indicator: "RC4"
+    - api: "CryptEncrypt"
+    - api: "CryptDecrypt"

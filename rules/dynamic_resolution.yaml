@@ -1,0 +1,19 @@
+name: "Dynamic API Resolution"
+namespace: "defense-evasion/api-resolution"
+scope: "file"
+meta:
+  att&ck: "T1027.007"
+  mbc: "Defense Evasion::Dynamic API Resolution [B0001]"
+  weight: 15
+  description: "Resolves function addresses dynamically at runtime to obscure API dependencies"
+features:
+  and:
+    - or:
+        - api: "LoadLibraryA"
+        - api: "LoadLibraryW"
+        - api: "LoadLibraryExA"
+        - api: "LoadLibraryExW"
+        - api: "LdrLoadDll"
+    - or:
+        - api: "GetProcAddress"
+        - api: "LdrGetProcedureAddress"

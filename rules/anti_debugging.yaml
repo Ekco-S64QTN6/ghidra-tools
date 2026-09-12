@@ -1,0 +1,15 @@
+name: "Anti-Debugging & Dynamic Resolution"
+namespace: "anti-analysis/anti-debugging"
+scope: "file"
+meta:
+  att&ck: "T1027"
+  mbc: "Anti-Behavioral Analysis::Dynamic API Resolution [B0024]"
+  weight: 20
+  description: "Dynamically resolves API functions at runtime to evade static import analysis"
+features:
+  and:
+    - api: "GetModuleHandleA"
+    - or:
+        - api: "GetProcAddress"
+        - api: "LoadLibraryA"
+        - api: "LoadLibraryW"

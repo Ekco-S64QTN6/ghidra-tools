@@ -1,0 +1,15 @@
+name: "Process / Shell Execution"
+namespace: "execution/command-execution"
+scope: "file"
+meta:
+  att&ck: "T1059"
+  mbc: "Execution::Command and Scripting Interpreter [E1059]"
+  weight: 25
+  description: "Spawns child processes or shell commands via ShellExecute or CreateProcess"
+features:
+  or:
+    - api: "ShellExecuteA"
+    - api: "ShellExecuteW"
+    - api: "WinExec"
+    - api: "CreateProcessA"
+    - api: "CreateProcessW"

@@ -1,0 +1,14 @@
+name: "Network Configuration Discovery"
+namespace: "discovery/network-info"
+scope: "file"
+meta:
+  att&ck: "T1016"
+  mbc: "Discovery::Network Configuration Discovery [E1016]"
+  weight: 15
+  description: "Enumerates local network interfaces, IP addresses, or adapter tables"
+features:
+  or:
+    - api: "GetIpAddrTable"
+    - api: "GetAdaptersAddresses"
+    - api: "GetAdaptersInfo"
+    - indicator: "Public IP address"

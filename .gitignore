@@ -1,0 +1,46 @@
+# Ghidra project databases (large binary blobs)
+projects/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Never track anything dropped in ingress/ — samples, and whatever ships alongside them
+ingress/*
+!ingress/.gitkeep
+
+# (kept for clarity; covered by the rule above)
+ingress/**/*.bin
+ingress/**/*.sfc
+ingress/**/*.smc
+ingress/**/*.exe
+ingress/**/*.dll
+ingress/**/*.elf
+ingress/**/*.so
+ingress/**/*.rom
+ingress/**/*.fig
+ingress/**/*.sys
+
+# Keep the ingress and output dirs but not their contents.
+# Reports are partitioned per-binary into output/<binary_name>/ and indexed in reports.db.
+!ingress/.gitkeep
+!output/.gitkeep
+output/*/
+output/reports.db
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+dist/
+scratch/
+scratch_*
+scratchpad.md
+

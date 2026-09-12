@@ -1,0 +1,29 @@
+name: "Process Injection via Memory Modification"
+namespace: "host-interaction/process-inject"
+scope: "function"
+meta:
+  att&ck: "T1055"
+  mbc: "Process::Inject [B0006]"
+  weight: 35
+  description: "Allocates memory in a target process, writes instructions, or triggers remote thread execution"
+features:
+  or:
+    - and:
+        - or:
+            - api: "VirtualAllocEx"
+            - api: "NtAllocateVirtualMemory"
+            - api: "ZwAllocateVirtualMemory"
+        - or:
+            - api: "WriteProcessMemory"
+            - api: "NtWriteVirtualMemory"
+            - api: "ZwWriteVirtualMemory"
+    - and:
+        - or:
+            - api: "VirtualAllocEx"
+            - api: "WriteProcessMemory"
+        - or:
+            - api: "CreateRemoteThread"
+            - api: "NtCreateThreadEx"
+            - api: "RtlCreateUserThread"
+            - api: "QueueUserAPC"
+            - api: "SetThreadContext"
