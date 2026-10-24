@@ -1,5 +1,7 @@
 # Project Plan — ghidra-report
 
+**Status: feature-complete.** All seven phases below are implemented; the boxes record what shipped. There is no open backlog. The earlier external "Feature Gap Plan" (CAPA-style rules, FLOSS-style emulation, SARIF, firmware carving, SVD, parallel execution) was fully absorbed into Phases 3A, 5 and 6.
+
 ## Vision
 
 A dead-simple CLI toolkit that wraps Ghidra's headless analyzer to produce human-readable binary analysis reports. Designed for blue team analysts, security researchers, and anyone who wants actionable intelligence out of a binary without becoming a Ghidra power user.
