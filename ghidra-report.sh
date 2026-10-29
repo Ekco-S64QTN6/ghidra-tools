@@ -288,12 +288,22 @@ generate_report() {
     timestamp="$(date +%Y%m%d_%H%M%S)_$_${RANDOM}"
     local file_output_dir="$OUTPUT_DIR/$output_key"
     mkdir -p "$file_output_dir"
+    # A SIGKILL or host shutdown can bypass normal cleanup. Since process_binary
+    # holds this identity's lock, any existing stage belongs to a dead/failed run.
+    local stale_stage
+    for stale_stage in "$file_output_dir"/.stage.*; do
+        if [ -d "$stale_stage" ]; then
+            rm -rf "$stale_stage"
+        fi
+    done
     local stage_dir
     if ! stage_dir="$(mktemp -d "$file_output_dir/.stage.XXXXXX")"; then
         log_error "Could not create a private report staging directory."
         return 1
     fi
-    local report_base="$stage_dir/${binary_name}_report_${timestamp}"
+    # Include mktemp's random stage token so completed report names do not clobber
+    # an older immutable run even if a clock/PID/random suffix is reused.
+    local report_base="$stage_dir/${binary_name}_report_${timestamp}_${stage_dir##*.}"
 
     log_step "Generating report(s) for: ${BOLD}$binary_name${NC} [Formats: ${BOLD}$FORMAT${NC}]"
 
