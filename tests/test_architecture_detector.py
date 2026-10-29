@@ -188,7 +188,16 @@ class ArchitectureDetectorTests(unittest.TestCase):
                 text=True,
             )
             result = json.loads(root.stdout)
+            self.assertEqual(result["format"], "elf")
             self.assertEqual(result["processor"], "x86:LE:64:default")
+
+        direct_type = subprocess.run(
+            [sys.executable, os.path.join(REPO_ROOT, "scripts", "architecture_detector.py"), "type", path],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(direct_type.stdout.strip(), "elf")
 
         cli = subprocess.run(
             [os.path.join(REPO_ROOT, "ghidra-report.sh"), "--detect-type", path],
@@ -203,7 +212,8 @@ class ArchitectureDetectorTests(unittest.TestCase):
                 text=True,
             )
             self.fail(
-                f"CLI should detect ELF, got stdout={cli.stdout!r}, stderr={cli.stderr!r}; "
+                f"CLI should detect ELF, direct type={direct_type.stdout!r}, "
+                f"got stdout={cli.stdout!r}, stderr={cli.stderr!r}; "
                 f"shell trace tail={trace.stderr[-2500:]!r}"
             )
 
