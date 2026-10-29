@@ -18,3 +18,4 @@ All notable changes to this project are documented here.
 - Make batch execution report per-item success/failure counts and return nonzero when any sample fails, while continuing the remaining items.
 - Validate file headers before format classification, select ELF processors from class/endianness/e_machine, log detection evidence, and include GBA/PSX/N64 ROMs in batch discovery. Use declared RISC-V language IDs and defer MIPS64 selection until ISA/ABI flags can be interpreted safely.
 - Use the status-preserving headless log helper for loader imports and SNES fallback, and add regression coverage for nonzero analyzer exit statuses.
+- Derive Ghidra project names from canonical source path, sample content, and project-affecting settings so same-basename inputs or changed content do not reuse the wrong project.

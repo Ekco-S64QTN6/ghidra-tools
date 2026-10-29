@@ -134,9 +134,7 @@ detect_elf_arch() {
 # Generate a project name from a binary path
 project_name_for() {
     local file="$1"
-    local base
-    base="$(basename "$file")"
-    echo "$base" | tr -cs 'a-zA-Z0-9_' '_'
+    python3 "$SCRIPTS_DIR/project_identity.py" "$file" "${RUN_FINDCRYPT:-false}" "${GHIDRA_ROOT:-}"
 }
 
 # Import binary into a Ghidra project and run analysis

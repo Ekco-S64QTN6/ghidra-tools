@@ -32,6 +32,9 @@ jobs:
       - name: Test validated file and processor detection
         run: python3 tests/test_architecture_detector.py
 
+      - name: Test collision-resistant project identity
+        run: python3 tests/test_project_identity.py
+
       - name: Smoke-test CLI help without a Ghidra install
         run: ./ghidra-report.sh --help >/dev/null
 
