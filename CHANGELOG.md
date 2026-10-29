@@ -11,3 +11,4 @@ All notable changes to this project are documented here.
 - Replace the CI's ignored firmware scan with compile, CLI, launcher, and dashboard security checks; remove the upload-only SARIF job until CI generates the referenced artifact, and document the full-suite limitation.
 - Keep `--help` and offline CLI utilities available without Ghidra by checking Ghidra prerequisites only when binary analysis starts.
 - Reject truncated U-Boot uImage payloads whose declared length exceeds the available input and add synthetic bounds regression tests.
+- Normalize top-level array and CAPE-style dynamic traces, preserve event metadata, compare API names case-insensitively, and prevent cross-process attack-chain matches.
