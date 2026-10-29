@@ -31,7 +31,7 @@ def make_uimage(declared_size, payload=b"", name=b"synthetic-test"):
         1,              # ARM
         2,              # kernel
         0,              # no compression
-        name + b"\x00",
+        name[:31].ljust(31, b"\x00") + b"\x00",
     )
     if len(header) != 64:
         raise AssertionError("synthetic uImage header must be 64 bytes")
