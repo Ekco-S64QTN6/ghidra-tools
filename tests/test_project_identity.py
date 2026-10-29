@@ -28,7 +28,10 @@ class ProjectIdentityTests(unittest.TestCase):
 
             first_name = project_identity.project_identity(first)
             second_name = project_identity.project_identity(second)
+            first_output = project_identity.output_identity(first)
+            second_output = project_identity.output_identity(second)
             self.assertNotEqual(first_name, second_name)
+            self.assertNotEqual(first_output, second_output)
             self.assertIn("sample_bin", first_name)
             self.assertIn("sample_bin", second_name)
 
@@ -42,6 +45,27 @@ class ProjectIdentityTests(unittest.TestCase):
                 handle.write(b"second sample")
             second_name = project_identity.project_identity(path)
             self.assertNotEqual(first_name, second_name)
+
+    def test_output_identity_changes_when_file_content_changes(self):
+        with tempfile.TemporaryDirectory(prefix="project-identity-") as temp:
+            path = os.path.join(temp, "sample.bin")
+            with open(path, "wb") as handle:
+                handle.write(b"first output")
+            first = project_identity.output_identity(path)
+            with open(path, "wb") as handle:
+                handle.write(b"second output")
+            second = project_identity.output_identity(path)
+            self.assertNotEqual(first, second)
+
+    def test_project_settings_do_not_change_the_stable_output_identity(self):
+        with tempfile.TemporaryDirectory(prefix="project-identity-") as temp:
+            path = os.path.join(temp, "sample.bin")
+            with open(path, "wb") as handle:
+                handle.write(b"same source")
+            self.assertEqual(
+                project_identity.output_identity(path),
+                project_identity.identities(path, "false", "/opt/ghidra")[1],
+            )
 
     def test_identity_is_stable_for_same_path_content_and_settings(self):
         with tempfile.TemporaryDirectory(prefix="project-identity-") as temp:
@@ -101,9 +125,28 @@ class ProjectIdentityTests(unittest.TestCase):
             )
             self.assertEqual(result.stdout.strip(), project_identity.project_identity(path, "false", ""))
 
+        output_cli = subprocess.run(
+            [sys.executable, os.path.join(REPO_ROOT, "scripts", "project_identity.py"), "output", path],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(output_cli.stdout.strip(), project_identity.output_identity(path))
+
+        identity_cli = subprocess.run(
+            [sys.executable, os.path.join(REPO_ROOT, "scripts", "project_identity.py"), "identities", path, "false", ""],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        project_name, output_key = identity_cli.stdout.rstrip("\n").split("\t")
+        self.assertEqual(project_name, project_identity.project_identity(path, "false", ""))
+        self.assertEqual(output_key, project_identity.output_identity(path))
+
         with open(os.path.join(REPO_ROOT, "ghidra-report.sh"), encoding="utf-8") as handle:
             shell = handle.read()
-        self.assertIn('python3 "$SCRIPTS_DIR/project_identity.py"', shell)
+        self.assertIn('project_identity.py" identities', shell)
+        self.assertIn('project_identity.py" output', shell)
 
 
 if __name__ == "__main__":
