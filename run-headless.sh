@@ -57,7 +57,7 @@ JAVA_VERSION_OUTPUT="$("$JAVA_BIN" -version 2>&1)" || {
     echo "[ERROR] Could not query the selected Java runtime: $JAVA_BIN" >&2
     exit 1
 }
-JAVA_VERSION_LINE="\${JAVA_VERSION_OUTPUT%%
+JAVA_VERSION_LINE="${JAVA_VERSION_OUTPUT%%
     # The Flatpak launch.sh wrapper can fail outside the sandbox. Derive the
     # bundled JDK from the detected installation instead of hard-coding a host.
     UTILITY_JAR="$GHIDRA_ROOT/Ghidra/Framework/Utility/lib/Utility.jar"
@@ -104,7 +104,7 @@ for properties_path in "$GHIDRA_ROOT/Ghidra/application.properties" "$GHIDRA_ROO
     fi
 done
 echo "[INFO] Ghidra root: $GHIDRA_ROOT"
-echo "[INFO] Ghidra version: \${GHIDRA_VERSION:-unknown (version metadata missing)}"
+echo "[INFO] Ghidra version: ${GHIDRA_VERSION:-unknown (version metadata missing)}"
 echo "[INFO] Java runtime: $JAVA_VERSION_LINE"
 
 if [[ "$FLATPAK_MODE" == true ]]; then
