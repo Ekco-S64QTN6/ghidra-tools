@@ -244,8 +244,8 @@ Make it production-ready for security workflows, CI/CD, and threat intelligence 
 - [x] **Watch Mode Daemon** — inotify/polling ingress watcher (`--watch`) for zero-touch drop analysis
 
 ### Deployment & Integrations
-- [x] **Dockerized deployment** (`Dockerfile`, `docker-compose.yml`) — container with Eclipse Temurin JDK 21 and Ghidra headless pre-configured
-- [x] **GitHub Actions workflow** (`.github/workflows/binary-analysis.yml`) — regression testing and SARIF upload to GitHub Code Scanning
+- [x] **Dockerized deployment** (`Dockerfile`, `docker-compose.yml`) — container pinned to Ghidra 12.2 and Eclipse Temurin JDK 25; official Ghidra archive SHA-256 is verified during build
+- [x] **GitHub Actions workflow** (`.github/workflows/binary-analysis.yml`) — fast no-Ghidra regressions plus a pinned-container PE import/report smoke test; SARIF upload is not enabled because the workflow does not publish a repository artifact
 - [x] **Slack/Discord/webhook notifications** — configurable alerts (`--webhook <url>`) on completion or when threat score exceeds threshold
 - [x] **SQLite report index (partial)** — indexes the latest report per filename and searches filenames/hashes, suspicious APIs, IOCs, and indicators using `LIKE`; repeated filenames overwrite the earlier row. Full per-run history and FTS5 are still open in `ROADMAP.md`.
 - [x] **Web dashboard** (`scripts/dashboard.py`) — standalone Python HTTP server; browse reports, use `LIKE`-based search over the indexed fields, and inspect artifacts (`--dashboard [port]`).
