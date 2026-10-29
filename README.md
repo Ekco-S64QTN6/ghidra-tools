@@ -363,6 +363,12 @@ SARIF output to GitHub Code Scanning.
 ./tests/run_tests.sh
 ```
 
+The headless launcher also has a standalone mocked regression test that needs no Ghidra install:
+
+```bash
+bash tests/test_run_headless.sh
+```
+
 The suite is self-contained: `tests/make_fixtures.py` synthesizes its own samples,
 so a fresh clone runs the whole thing. Nothing is read from `ingress/` — that is a
 drop folder for whatever you are actually triaging, its contents are git-ignored,
@@ -387,7 +393,7 @@ compile of the whole Java pipeline.
 
 ```
 ghidra-report.sh          Main CLI
-run-headless.sh           Ghidra headless invocation (works outside the Flatpak sandbox)
+run-headless.sh           Portable Ghidra headless launcher (GHIDRA_ROOT/JAVA_HOME aware)
 scripts/
   ExportFullReport.java   Orchestrator
   lib/*.java              Analyzers and renderers

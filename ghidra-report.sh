@@ -33,7 +33,7 @@ GHIDRA_ROOT="${GHIDRA_ROOT:-}"
 if [ -z "$GHIDRA_ROOT" ] || [ ! -d "$GHIDRA_ROOT" ]; then
     for candidate in \
         "/var/lib/flatpak/app/org.ghidra_sre.Ghidra/x86_64/stable/active/files/lib/ghidra" \
-        "/var/lib/flatpak/app/org.ghidra_sre.Ghidra/current/active/files/ghidra" \
+        "/var/lib/flatpak/app/org.ghidra_sre.Ghidra/current/active/files/lib/ghidra" \
         "/opt/ghidra" \
         "/usr/share/ghidra"; do
         if [ -d "$candidate" ]; then
@@ -42,6 +42,8 @@ if [ -z "$GHIDRA_ROOT" ] || [ ! -d "$GHIDRA_ROOT" ]; then
         fi
     done
 fi
+# Pass the same detected installation to the child launcher.
+export GHIDRA_ROOT
 HEADLESS="$SCRIPT_DIR/run-headless.sh"
 
 # Colors

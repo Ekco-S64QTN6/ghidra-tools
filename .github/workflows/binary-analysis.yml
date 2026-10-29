@@ -53,3 +53,12 @@ jobs:
           sarif_file: output/dsetup.dll/report_latest.sarif
           category: ghidra-report
         continue-on-error: true
+
+  launcher-regression:
+    name: Portable Headless Launcher Regression
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Test launcher selection and argument forwarding
+        run: bash tests/test_run_headless.sh
