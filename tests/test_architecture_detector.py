@@ -196,7 +196,16 @@ class ArchitectureDetectorTests(unittest.TestCase):
             capture_output=True,
             text=True,
         )
-        self.assertEqual(cli.stdout.strip(), "elf")
+        if cli.stdout.strip() != "elf":
+            trace = subprocess.run(
+                ["bash", "-x", os.path.join(REPO_ROOT, "ghidra-report.sh"), "--detect-type", path],
+                capture_output=True,
+                text=True,
+            )
+            self.fail(
+                f"CLI should detect ELF, got stdout={cli.stdout!r}, stderr={cli.stderr!r}; "
+                f"shell trace tail={trace.stderr[-2500:]!r}"
+            )
 
         with open(os.path.join(REPO_ROOT, "ghidra-report.sh"), encoding="utf-8") as handle:
             shell = handle.read()
