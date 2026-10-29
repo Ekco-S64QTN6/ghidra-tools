@@ -27,8 +27,10 @@ class GhidraReport < Formula
 
     launcher = File.read("packaging/ghidra-report-launcher.sh.in")
     launcher.gsub!("@APP_ROOT@", libexec.to_s)
-    (bin/"ghidra-report").write(launcher)
-    (bin/"ghidra-report").chmod 0755
+    (libexec/"ghidra-report-launcher").write(launcher)
+    (libexec/"ghidra-report-launcher").chmod 0755
+    bin.write_env_script libexec/"ghidra-report-launcher",
+                         Language::Java.overridable_java_home_env("25")
 
     man1.install "ghidra-report.1"
   end
