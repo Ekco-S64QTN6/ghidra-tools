@@ -12,7 +12,7 @@ def get_db():
     cur.execute("""
         CREATE TABLE IF NOT EXISTS reports (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            file TEXT UNIQUE,
+            file TEXT,
             timestamp TEXT,
             format_label TEXT,
             risk_score INTEGER,
@@ -56,14 +56,84 @@ def get_db():
             FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE
         )
     """)
+    _migrate_report_identity(conn)
     conn.commit()
     return conn
+
+
+def _has_unique_file_index(conn):
+    cur = conn.cursor()
+    indexes = cur.execute("PRAGMA index_list(reports)").fetchall()
+    for index in indexes:
+        if not index[2]:
+            continue
+        columns = [
+            row[2]
+            for row in cur.execute(f"PRAGMA index_info('{index[1]}')").fetchall()
+        ]
+        if columns == ["file"]:
+            return True
+    return False
+
+
+def _migrate_report_identity(conn):
+    """Remove the legacy UNIQUE(file) constraint while preserving report IDs and findings."""
+    if _has_unique_file_index(conn):
+        conn.commit()
+        conn.execute("PRAGMA foreign_keys = OFF")
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute("""
+                CREATE TABLE reports_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    file TEXT,
+                    timestamp TEXT,
+                    format_label TEXT,
+                    risk_score INTEGER,
+                    risk_level TEXT,
+                    md5 TEXT,
+                    sha256 TEXT,
+                    imphash TEXT,
+                    function_count INTEGER,
+                    json_path TEXT
+                )
+            """)
+            conn.execute("""
+                INSERT INTO reports_new
+                    (id, file, timestamp, format_label, risk_score, risk_level,
+                     md5, sha256, imphash, function_count, json_path)
+                SELECT id, file, timestamp, format_label, risk_score, risk_level,
+                       md5, sha256, imphash, function_count, json_path
+                FROM reports
+            """)
+            conn.execute("DROP TABLE reports")
+            conn.execute("ALTER TABLE reports_new RENAME TO reports")
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.execute("PRAGMA foreign_keys = ON")
+
+    conn.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_json_path_unique
+        ON reports(json_path)
+    """)
+
+
+def _output_key_for_path(json_path, filename):
+    """Use the report's containing output directory to distinguish equal basenames."""
+    if json_path:
+        return os.path.basename(os.path.dirname(os.path.abspath(json_path))) or filename
+    return filename
+
 
 def index_report(json_path):
     if not os.path.exists(json_path):
         print(f"Error: JSON report not found: {json_path}", file=sys.stderr)
         return
 
+    json_path = os.path.realpath(json_path)
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
@@ -81,7 +151,8 @@ def index_report(json_path):
     cur.execute("""
         INSERT INTO reports (file, timestamp, format_label, risk_score, risk_level, md5, sha256, imphash, function_count, json_path)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(file) DO UPDATE SET
+        ON CONFLICT(json_path) DO UPDATE SET
+            file=excluded.file,
             timestamp=excluded.timestamp,
             format_label=excluded.format_label,
             risk_score=excluded.risk_score,
@@ -89,8 +160,7 @@ def index_report(json_path):
             md5=excluded.md5,
             sha256=excluded.sha256,
             imphash=excluded.imphash,
-            function_count=excluded.function_count,
-            json_path=excluded.json_path
+            function_count=excluded.function_count
     """, (
         filename,
         timestamp,
@@ -104,7 +174,7 @@ def index_report(json_path):
         json_path
     ))
     
-    cur.execute("SELECT id FROM reports WHERE file = ?", (filename,))
+    cur.execute("SELECT id FROM reports WHERE json_path = ?", (json_path,))
     report_id = cur.fetchone()[0]
 
     # Clean old child records
@@ -165,7 +235,7 @@ def search_db(query):
     print(f"  GHIDRA-REPORT HISTORICAL DATABASE SEARCH: \"{query}\"")
     print("=" * 80)
 
-    # Search in reports
+    # Keep json_path in every result so same-named samples remain separate.
     cur.execute("""
         SELECT id, file, format_label, risk_score, risk_level, md5, sha256, imphash, json_path
         FROM reports
@@ -173,27 +243,25 @@ def search_db(query):
     """, (q, q, q, q))
     report_hits = cur.fetchall()
 
-    # Search in suspicious APIs
     cur.execute("""
-        SELECT r.id, r.file, r.risk_score, r.risk_level, a.library, a.function, a.mitre, a.category
+        SELECT r.id, r.file, r.risk_score, r.risk_level,
+               a.library, a.function, a.mitre, a.category, r.json_path
         FROM suspicious_apis a
         JOIN reports r ON a.report_id = r.id
         WHERE a.library LIKE ? OR a.function LIKE ? OR a.category LIKE ? OR a.mitre LIKE ?
     """, (q, q, q, q))
     api_hits = cur.fetchall()
 
-    # Search in IOCs
     cur.execute("""
-        SELECT r.id, r.file, r.risk_score, r.risk_level, i.type, i.value
+        SELECT r.id, r.file, r.risk_score, r.risk_level, i.type, i.value, r.json_path
         FROM iocs i
         JOIN reports r ON i.report_id = r.id
         WHERE i.value LIKE ? OR i.type LIKE ?
     """, (q, q))
     ioc_hits = cur.fetchall()
 
-    # Search in Indicators
     cur.execute("""
-        SELECT r.id, r.file, r.risk_score, r.risk_level, ind.description, ind.mitre
+        SELECT r.id, r.file, r.risk_score, r.risk_level, ind.description, ind.mitre, r.json_path
         FROM indicators ind
         JOIN reports r ON ind.report_id = r.id
         WHERE ind.description LIKE ? OR ind.mitre LIKE ?
@@ -206,37 +274,42 @@ def search_db(query):
         conn.close()
         return
 
-    # Group matches by file
     files = {}
-    for r in report_hits:
-        fid = r[1]
-        files.setdefault(fid, {"score": r[3], "level": r[4], "matches": []})
-        files[fid]["matches"].append(f"Metadata match: {r[1]} ({r[2]})")
 
-    for a in api_hits:
-        fid = a[1]
-        files.setdefault(fid, {"score": a[2], "level": a[3], "matches": []})
-        files[fid]["matches"].append(f"Suspicious API: {a[4]}!{a[5]} [{a[6]}] ({a[7]})")
+    def add_match(filename, output_path, score, level, match):
+        output_key = _output_key_for_path(output_path, filename)
+        files.setdefault(output_key, {
+            "file": filename,
+            "output_key": output_key,
+            "score": score,
+            "level": level,
+            "matches": [],
+        })
+        files[output_key]["matches"].append(match)
 
-    for i in ioc_hits:
-        fid = i[1]
-        files.setdefault(fid, {"score": i[2], "level": i[3], "matches": []})
-        files[fid]["matches"].append(f"IOC [{i[4]}]: {i[5]}")
+    for row in report_hits:
+        add_match(row[1], row[8], row[3], row[4], f"Metadata match: {row[1]} ({row[2]})")
 
-    for ind in ind_hits:
-        fid = ind[1]
-        files.setdefault(fid, {"score": ind[2], "level": ind[3], "matches": []})
-        files[fid]["matches"].append(f"Threat Flag: {ind[4]}")
+    for row in api_hits:
+        add_match(
+            row[1], row[8], row[2], row[3],
+            f"Suspicious API: {row[4]}!{row[5]} [{row[6]}] ({row[7]})",
+        )
 
-    for fname, info in files.items():
-        print(f"\n  Target Binary: {fname}  [Risk: {info["score"]}/100 - {info["level"]}]")
+    for row in ioc_hits:
+        add_match(row[1], row[6], row[2], row[3], f"IOC [{row[4]}]: {row[5]}")
+
+    for row in ind_hits:
+        add_match(row[1], row[6], row[2], row[3], f"Threat Flag: {row[4]}")
+
+    for output_key, info in files.items():
+        print(f"\n  Target Binary: {info['file']}  [Output: {output_key}]  [Risk: {info['score']}/100 - {info['level']}]")
         print("  " + "-" * 70)
-        # Deduplicate and limit matches
         seen = set()
-        for m in info["matches"]:
-            if m not in seen:
-                seen.add(m)
-                print(f"    ● {m}")
+        for match in info["matches"]:
+            if match not in seen:
+                seen.add(match)
+                print(f"    ● {match}")
 
     print()
     print("=" * 80)

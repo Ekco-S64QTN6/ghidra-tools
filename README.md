@@ -61,8 +61,9 @@ cd ghidra-tools
 cp /path/to/suspicious.dll ingress/     # drop anything in here
 ./ghidra-report.sh --batch              # analyze everything in ingress/
 
-cat    output/suspicious.dll/report_latest.txt
-xdg-open output/suspicious.dll/report_latest.html
+OUTPUT_KEY="$(python3 scripts/project_identity.py output ingress/suspicious.dll)"
+cat    "output/$OUTPUT_KEY/report_latest.txt"
+xdg-open "output/$OUTPUT_KEY/report_latest.html"
 ```
 
 Or point it straight at one file:
@@ -79,8 +80,7 @@ automatically; anything else, set `GHIDRA_ROOT`.
 
 ## What a report contains
 
-One run writes every artifact into `output/<binary>/`, plus `report_latest.*`
-symlinks that always point at the newest run.
+One run writes every artifact into `output/<output_key>/`, plus `report_latest.*` symlinks that point at the newest report in that identity. The stable key combines a sanitized filename, canonical source-path hash, and content hash, so files with the same basename (or changed bytes at a reused path) do not share outputs. Get the key with `python3 scripts/project_identity.py output <binary_path>`; for `--diff`, `--rules`, and `--trace`, pass that key to select one exact report. A basename is accepted only when it uniquely identifies an output directory.
 
 | Artifact | What it is for |
 |:--|:--|
@@ -458,7 +458,7 @@ scripts/
   *.py                    Side pipelines
 rules/*.yaml              Capability detection rules
 ingress/                  Drop binaries here
-output/<binary>/          Reports, plus reports.db
+output/<output_key>/      Reports for one canonical path + content identity, plus reports.db
 projects/                 Ghidra project cache (--purge-projects to clear)
 docs/                     Processor profiles, SOAR integration
 tests/run_tests.sh        Integration suite

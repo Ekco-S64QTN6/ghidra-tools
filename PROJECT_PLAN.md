@@ -238,7 +238,7 @@ Make it production-ready for security workflows, CI/CD, and threat intelligence 
 - [x] **MISP Event Export** — MISP-compatible JSON format (`.misp.json`) for threat intelligence ingestion
 
 ### Execution Engine & Storage Hygiene
-- [x] **Per-Binary Output Partitioning** — outputs neatly categorized into `output/<binary_name>/` with `report_latest.*` symlinks
+- [x] **Collision-Resistant Output Partitioning** — outputs in `output/<output_key>/`, keyed by sanitized basename, canonical path hash, and content hash; same-name reports remain separate in dashboard/history, with `report_latest.*` symlinks per identity
 - [x] **Temporary Project Purging (`--purge-projects`)** — automated cleanup routine to purge transient `.rep` and `.gpr` databases
 - [x] **Parallel Worker Pool Dispatcher** — multi-process job queue (`--parallel` / `-j`) to analyze ingress files concurrently across multi-core systems
 - [x] **Watch Mode Daemon** — inotify/polling ingress watcher (`--watch`) for zero-touch drop analysis

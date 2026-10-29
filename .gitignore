@@ -29,7 +29,7 @@ ingress/**/*.fig
 ingress/**/*.sys
 
 # Keep the ingress and output dirs but not their contents.
-# Reports are partitioned per-binary into output/<binary_name>/ and indexed in reports.db.
+# Reports are partitioned by stable source-path + content identity in output/<output_key>/ and indexed in reports.db.
 !ingress/.gitkeep
 !output/.gitkeep
 output/*/

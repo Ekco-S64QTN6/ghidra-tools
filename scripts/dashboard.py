@@ -21,6 +21,24 @@ MAX_SEARCH_ROWS = 100
 MAX_SERVED_FILE_BYTES = 50 * 1024 * 1024
 
 
+def output_key_for_report(json_path, fallback):
+    """Return a direct child output-directory name for a stored report path."""
+    if not json_path:
+        return fallback
+    try:
+        output_root = os.path.realpath(OUTPUT_DIR)
+        report_path = os.path.realpath(os.path.abspath(json_path))
+        output_dir = os.path.dirname(report_path)
+        if os.path.dirname(output_dir) != output_root:
+            return fallback
+        if os.path.commonpath((output_root, output_dir)) != output_root:
+            return fallback
+        key = os.path.basename(output_dir)
+        return key or fallback
+    except (OSError, ValueError):
+        return fallback
+
+
 def resolve_output_path(relative_path):
     """Resolve a requested report path and reject traversal or symlink escapes."""
     try:
@@ -298,13 +316,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           </td>
           <td>
             <div class="actions">
-              <a class="btn btn-primary" href="/output/${encodeURIComponent(r.file)}/report_latest.html" target="_blank" rel="noopener noreferrer">HTML</a>
-              <a class="btn" href="/output/${encodeURIComponent(r.file)}/report_latest.txt" target="_blank" rel="noopener noreferrer">TXT</a>
-              <a class="btn" href="/output/${encodeURIComponent(r.file)}/report_latest.json" target="_blank" rel="noopener noreferrer">JSON</a>
-              <a class="btn" href="/output/${encodeURIComponent(r.file)}/report_latest.md" target="_blank" rel="noopener noreferrer">MD</a>
-              <a class="btn" href="/output/${encodeURIComponent(r.file)}/report_latest.sarif" target="_blank" rel="noopener noreferrer">SARIF</a>
-              <a class="btn" href="/output/${encodeURIComponent(r.file)}/report_latest.yar" target="_blank" rel="noopener noreferrer">YARA</a>
-              <a class="btn" href="/output/${encodeURIComponent(r.file)}/report_latest.misp.json" target="_blank" rel="noopener noreferrer">MISP</a>
+              <a class="btn btn-primary" href="/output/${encodeURIComponent(r.output_key || r.file)}/report_latest.html" target="_blank" rel="noopener noreferrer">HTML</a>
+              <a class="btn" href="/output/${encodeURIComponent(r.output_key || r.file)}/report_latest.txt" target="_blank" rel="noopener noreferrer">TXT</a>
+              <a class="btn" href="/output/${encodeURIComponent(r.output_key || r.file)}/report_latest.json" target="_blank" rel="noopener noreferrer">JSON</a>
+              <a class="btn" href="/output/${encodeURIComponent(r.output_key || r.file)}/report_latest.md" target="_blank" rel="noopener noreferrer">MD</a>
+              <a class="btn" href="/output/${encodeURIComponent(r.output_key || r.file)}/report_latest.sarif" target="_blank" rel="noopener noreferrer">SARIF</a>
+              <a class="btn" href="/output/${encodeURIComponent(r.output_key || r.file)}/report_latest.yar" target="_blank" rel="noopener noreferrer">YARA</a>
+              <a class="btn" href="/output/${encodeURIComponent(r.output_key || r.file)}/report_latest.misp.json" target="_blank" rel="noopener noreferrer">MISP</a>
             </div>
           </td>
         </tr>
@@ -358,8 +376,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       list.innerHTML = Object.entries(results).map(([file, info]) => `
         <div style="margin-bottom: 12px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 6px;">
           <div style="font-weight:600; font-size:13px; margin-bottom:4px;">
-            ${escapeHtml(file)} <span class="badge ${getBadgeClass(info.level)}" style="margin-left:6px;">${escapeHtml(info.score)}/100 [${escapeHtml(info.level)}]</span>
+            ${escapeHtml(info.file || file)} <span class="badge ${getBadgeClass(info.level)}" style="margin-left:6px;">${escapeHtml(info.score)}/100 [${escapeHtml(info.level)}]</span>
           </div>
+          <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">Output: ${escapeHtml(info.output_key || file)}</div>
           <ul style="padding-left: 20px; font-size: 12px; color: var(--text);">
             ${info.matches.map(m => `<li>${escapeHtml(m)}</li>`).join('')}
           </ul>
@@ -450,7 +469,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             conn = sqlite3.connect(DB_PATH)
             cur = conn.cursor()
             cur.execute("""
-                SELECT file, timestamp, format_label, risk_score, risk_level, md5, sha256, imphash, function_count
+                SELECT file, timestamp, format_label, risk_score, risk_level, md5, sha256, imphash, function_count, json_path
                 FROM reports ORDER BY id DESC LIMIT ?
             """, (MAX_REPORTS_RESPONSE,))
             rows = cur.fetchall()
@@ -465,7 +484,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     "md5": r[5],
                     "sha256": r[6],
                     "imphash": r[7],
-                    "function_count": r[8]
+                    "function_count": r[8],
+                    "output_key": output_key_for_report(r[9], r[0]),
                 })
             conn.close()
             self.send_json(reports)
@@ -485,36 +505,32 @@ class DashboardHandler(BaseHTTPRequestHandler):
             cur = conn.cursor()
             query = f"%{q}%"
 
-            # Search in reports
             cur.execute("""
-                SELECT r.file, r.risk_score, r.risk_level, 'Metadata', r.format_label
+                SELECT r.file, r.risk_score, r.risk_level, 'Metadata', r.format_label, r.json_path
                 FROM reports r
                 WHERE r.file LIKE ? OR r.md5 LIKE ? OR r.sha256 LIKE ? OR r.imphash LIKE ?
                 LIMIT ?
             """, (query, query, query, query, MAX_SEARCH_ROWS))
             m_hits = cur.fetchall()
 
-            # Search in APIs
             cur.execute("""
-                SELECT r.file, r.risk_score, r.risk_level, a.library, a.function
+                SELECT r.file, r.risk_score, r.risk_level, a.library, a.function, r.json_path
                 FROM suspicious_apis a JOIN reports r ON a.report_id = r.id
                 WHERE a.library LIKE ? OR a.function LIKE ? OR a.category LIKE ? OR a.mitre LIKE ?
                 LIMIT ?
             """, (query, query, query, query, MAX_SEARCH_ROWS))
             api_hits = cur.fetchall()
 
-            # Search in IOCs
             cur.execute("""
-                SELECT r.file, r.risk_score, r.risk_level, i.type, i.value
+                SELECT r.file, r.risk_score, r.risk_level, i.type, i.value, r.json_path
                 FROM iocs i JOIN reports r ON i.report_id = r.id
                 WHERE i.value LIKE ? OR i.type LIKE ?
                 LIMIT ?
             """, (query, query, MAX_SEARCH_ROWS))
             ioc_hits = cur.fetchall()
 
-            # Search in indicators
             cur.execute("""
-                SELECT r.file, r.risk_score, r.risk_level, ind.category, ind.description
+                SELECT r.file, r.risk_score, r.risk_level, ind.category, ind.description, r.json_path
                 FROM indicators ind JOIN reports r ON ind.report_id = r.id
                 WHERE ind.description LIKE ? OR ind.mitre LIKE ?
                 LIMIT ?
@@ -522,21 +538,29 @@ class DashboardHandler(BaseHTTPRequestHandler):
             ind_hits = cur.fetchall()
 
             files = {}
-            for r in m_hits:
-                files.setdefault(r[0], {"score": r[1], "level": r[2], "matches": []})
-                files[r[0]]["matches"].append(f"Metadata match: {r[0]} ({r[4]})")
 
-            for a in api_hits:
-                files.setdefault(a[0], {"score": a[1], "level": a[2], "matches": []})
-                files[a[0]]["matches"].append(f"Suspicious API: {a[3]}!{a[4]}")
+            def add_match(filename, json_path, score, level, match):
+                output_key = output_key_for_report(json_path, filename)
+                files.setdefault(output_key, {
+                    "file": filename,
+                    "output_key": output_key,
+                    "score": score,
+                    "level": level,
+                    "matches": [],
+                })
+                files[output_key]["matches"].append(match)
 
-            for i in ioc_hits:
-                files.setdefault(i[0], {"score": i[1], "level": i[2], "matches": []})
-                files[i[0]]["matches"].append(f"IOC [{i[3]}]: {i[4]}")
+            for row in m_hits:
+                add_match(row[0], row[5], row[1], row[2], f"Metadata match: {row[0]} ({row[4]})")
 
-            for ind in ind_hits:
-                files.setdefault(ind[0], {"score": ind[1], "level": ind[2], "matches": []})
-                files[ind[0]]["matches"].append(f"Threat Flag: {ind[4]}")
+            for row in api_hits:
+                add_match(row[0], row[5], row[1], row[2], f"Suspicious API: {row[3]}!{row[4]}")
+
+            for row in ioc_hits:
+                add_match(row[0], row[5], row[1], row[2], f"IOC [{row[3]}]: {row[4]}")
+
+            for row in ind_hits:
+                add_match(row[0], row[5], row[1], row[2], f"Threat Flag: {row[4]}")
 
             conn.close()
             self.send_json(files)
