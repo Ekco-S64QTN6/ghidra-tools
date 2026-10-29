@@ -39,7 +39,7 @@ RULE_KEYS = {"name", "namespace", "scope", "meta", "features"}
 META_KEYS = {"att&ck", "mbc", "weight", "description"}
 
 
-def validate_feature_node(node, rule_path, node_path="features"):
+def validate_feature_node(node, node_path="features"):
     """Validate a feature expression before it reaches the evaluator."""
     if not isinstance(node, dict) or len(node) != 1:
         raise ValueError(f"{node_path}: expected a mapping with exactly one operator")
@@ -52,9 +52,9 @@ def validate_feature_node(node, rule_path, node_path="features"):
         if not isinstance(value, list) or not value:
             raise ValueError(f"{node_path}.{operator}: expected a non-empty list")
         for index, child in enumerate(value):
-            validate_feature_node(child, rule_path, f"{node_path}.{operator}[{index}]")
+            validate_feature_node(child, f"{node_path}.{operator}[{index}]")
     elif operator == "not":
-        validate_feature_node(value, rule_path, f"{node_path}.not")
+        validate_feature_node(value, f"{node_path}.not")
     elif operator == "count":
         if not isinstance(value, dict):
             raise ValueError(f"{node_path}.count: expected a mapping with 'min' and 'items'")
@@ -70,7 +70,7 @@ def validate_feature_node(node, rule_path, node_path="features"):
         if minimum > len(items):
             raise ValueError(f"{node_path}.count.min: cannot exceed the number of items")
         for index, child in enumerate(items):
-            validate_feature_node(child, rule_path, f"{node_path}.count.items[{index}]")
+            validate_feature_node(child, f"{node_path}.count.items[{index}]")
     elif operator == "section_rwx":
         if not isinstance(value, bool):
             raise ValueError(f"{node_path}.section_rwx: expected true or false")
@@ -106,7 +106,7 @@ def validate_rule(rule, rule_path):
         raise ValueError("meta.weight must be a non-negative integer")
     if "features" not in rule:
         raise ValueError("missing 'features' expression")
-    validate_feature_node(rule["features"], rule_path)
+    validate_feature_node(rule["features"])
 
 
 def load_rules(rules_dir):
