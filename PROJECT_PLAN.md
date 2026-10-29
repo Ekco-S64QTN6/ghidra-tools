@@ -247,8 +247,8 @@ Make it production-ready for security workflows, CI/CD, and threat intelligence 
 - [x] **Dockerized deployment** (`Dockerfile`, `docker-compose.yml`) — container with Eclipse Temurin JDK 21 and Ghidra headless pre-configured
 - [x] **GitHub Actions workflow** (`.github/workflows/binary-analysis.yml`) — regression testing and SARIF upload to GitHub Code Scanning
 - [x] **Slack/Discord/webhook notifications** — configurable alerts (`--webhook <url>`) on completion or when threat score exceeds threshold
-- [x] **SQLite report database** — index all generated reports; enables `ghidra-report --search "CreateRemoteThread"` across historical analyses
-- [x] **Web dashboard** (`scripts/dashboard.py`) — standalone Python HTTP server; browse reports, live FTS search, inspect artifacts (`--dashboard [port]`, `--serve`)
+- [x] **SQLite report index (partial)** — indexes the latest report per filename and searches filenames/hashes, suspicious APIs, IOCs, and indicators using `LIKE`; repeated filenames overwrite the earlier row. Full per-run history and FTS5 are still open in `ROADMAP.md`.
+- [x] **Web dashboard** (`scripts/dashboard.py`) — standalone Python HTTP server; browse reports, use `LIKE`-based search over the indexed fields, and inspect artifacts (`--dashboard [port]`).
 - [x] **OpenCTI / Shuffle SOAR integration** (`docs/SOAR_INTEGRATION.md`) — automated webhook playbooks and MISP/SARIF ingestion guides
 
 ---
@@ -285,7 +285,7 @@ Make it production-ready for security workflows, CI/CD, and threat intelligence 
         │                  │      │   StackStringDetector │  │            ▼
         │                  │      │   EmulatorDeobfuscator│  │  ┌──────────────────────┐
         │                  │      │   SnesAnalyzer        │  │  │  output/reports.db   │
-        │                  │      │   DecompilerExporter  │  │  │  (SQLite FTS index)  │
+        │                  │      │   DecompilerExporter  │  │  │  (SQLite LIKE)       │
         │                  │      │   HeuristicScorer     │  │  └──────────────────────┘
         │                  │      ▼                       │  │            │
         │                  │   ReportModel.ReportData ────┘  │            ▼
@@ -306,6 +306,10 @@ Make it production-ready for security workflows, CI/CD, and threat intelligence 
 └────────────────────┘    trace_correlator.py --trace
 ```
 
+## Current history/search limitation (2026-10-29)
+
+This plan records intended milestones, not a claim that all planned storage behavior has shipped. The current implementation uses ordinary SQLite tables and `LIKE` predicates; it does not create FTS5 virtual tables. Search covers report filenames/hashes, suspicious APIs, IOCs, and threat indicators. It does not index extracted strings or symbols, and re-indexing a filename replaces its previous row. See `ROADMAP.md` section 1.8 for the remaining historical-run and FTS work.
+
 ## Tech Stack
 
 | Component | Technology |
@@ -318,4 +322,4 @@ Make it production-ready for security workflows, CI/CD, and threat intelligence 
 | Console/firmware loaders | ghidra-snes, gba-ghidra-loader, N64LoaderWV, ghidra_psx_ldr, ghidra-firmware-utils |
 | Threat intel output | MISP event JSON, YARA rules, SARIF findings |
 | Dashboard | Python stdlib `http.server` (`scripts/dashboard.py`, no dependencies) |
-| Report storage | SQLite + FTS5 (`output/reports.db`, `scripts/index_report.py`) |
+| Report storage | SQLite tables with `LIKE` search (`output/reports.db`, `scripts/index_report.py`); no FTS5 or immutable run history yet |
