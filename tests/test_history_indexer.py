@@ -121,7 +121,7 @@ class HistoryIndexerFieldTests(unittest.TestCase):
         self.assertIn("Metadata match", query("sha-scope"))
         recovered = query("recovered")
         self.assertIn("Indexed text:", recovered)
-        self.assertIn("not-indexed-recovered-string", recovered)
+        self.assertIn("not-indexed-[recovered]-string", recovered)
         function_symbol = query("not-indexed-function-symbol")
         self.assertIn("Indexed text:", function_symbol)
         self.assertIn("not-indexed-function-symbol", function_symbol)
@@ -255,7 +255,7 @@ class HistoryIndexerFieldTests(unittest.TestCase):
                 index_report.search_db(term)
             return output.getvalue()
 
-        self.assertIn("old recoverable beacon marker", query("recoverable"))
+        self.assertIn("old [recoverable] beacon marker", query("recoverable"))
         self.assertIn("OldDecodePayload", query("OldDecodePayload"))
 
         value["deobfuscated_strings"] = [{"address": "0x401000", "value": "new persistence indicator marker"}]
@@ -264,7 +264,7 @@ class HistoryIndexerFieldTests(unittest.TestCase):
             json.dump(value, handle)
         index_report.index_report(path)
 
-        self.assertIn("new persistence indicator marker", query("persistence"))
+        self.assertIn("new [persistence] indicator marker", query("persistence"))
         self.assertIn("NewPersistenceRoutine", query("NewPersistenceRoutine"))
         self.assertIn("No matching records found", query("beacon"))
         self.assertIn("No matching records found", query("OldDecodePayload"))
