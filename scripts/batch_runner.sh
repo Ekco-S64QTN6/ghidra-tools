@@ -45,12 +45,12 @@ run_batch_workers() {
         done
 
         local index
-        for ((index = 0; index < \${#pids[@]}; index++)); do
-            if wait "\${pids[$index]}"; then
+        for ((index = 0; index < ${#pids[@]}; index++)); do
+            if wait "${pids[$index]}"; then
                 succeeded=$((succeeded + 1))
             else
                 failed=$((failed + 1))
-                printf '[ERROR] Batch worker failed for: %s\n' "\${paths[$index]}" >&2
+                printf '[ERROR] Batch worker failed for: %s\n' "${paths[$index]}" >&2
             fi
         done
     done
