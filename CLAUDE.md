@@ -6,7 +6,7 @@ Repository-specific guidance for contributors and coding agents.
 
 - The default container target is **Ghidra 12.2 + JDK 25**. Ghidra 12.2 requires at least JDK 25. The Docker build must verify the official release archive SHA-256 before extraction; do not update the version/date without refreshing the checksum from the upstream release and getting the container CI smoke test to pass.
 - `run-headless.sh` honors `GHIDRA_ROOT` and `JAVA_HOME`, uses `support/analyzeHeadless` for standard installs, and retains a derived-JDK workaround for Flatpak. Its Ghidra-root/version and Java-runtime messages are diagnostic; they do not certify compatibility of every Ghidra/Java pair.
-- Community console/firmware loaders are not bundled in the base Docker image. Claims about extension-backed loader behavior need an extension-equipped integration test. The core container test currently covers PE analysis and generated report formats, not SNES loader acceptance.
+- Community console/firmware loaders are not bundled in the base Docker image. Claims about extension-backed loader behavior need an extension-equipped integration test. The container test covers PE analysis plus a synthetic SNES ROM through the raw 65816 fallback; this does not validate optional community loader extensions or all retail ROM variants.
 
 ## Test lanes
 
@@ -17,6 +17,7 @@ Repository-specific guidance for contributors and coding agents.
 
 ## Output identity, concurrency, and publication
 
+- The primary JSON report uses `schema_version: "1.0.0"` and is described by `schemas/report-v1.schema.json`. When changing serialized fields, update the schema and fixtures, test control characters through the production `ReportFormat.escapeJson()` helper, and validate real PE/SNES container reports against the schema. Do not claim official SARIF/MISP schema validation when CI only checks their structural envelopes.
 - `scripts/project_identity.py` provides stable project and report-output identities. Project identity includes project-affecting settings; report-output identity intentionally excludes those settings. Use the same output key for all paths that address a report identity.
 - `process_binary()` locks a report identity before touching its Ghidra project and holds the lock through analysis, export, and latest-link updates. The OS advisory lock is implemented in `scripts/output_lock.py` and `scripts/output_lock.sh`. **Do not unlink or routinely clean files in `output/.locks/`**: a waiter could hold the old inode while a later process locks a newly created inode.
 - Reports are generated in a private `.stage.*` directory. Failed exports should not replace a previous `report_latest.*` target; abandoned staging directories are cleaned by the next run for that identity.
