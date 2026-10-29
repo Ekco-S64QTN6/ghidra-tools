@@ -166,6 +166,8 @@ These findings come from source inspection, not a successful execution of the pr
 - Fixtures include each supported input schema, list-shaped input, multiple processes, case variations, absent fields, and common injection chains.
 - Output differentiates confirmed, statically imported but unobserved, and unresolved dynamic APIs without treating any one category as a verdict by itself.
 
+**Incremental progress — 2026-10-29:** The trace loader now accepts top-level array traces without calling mapping methods on the list, normalizes generic and CAPE/Cuckoo process call records, retains process/thread/time/argument metadata on normalized calls, matches API names case-insensitively, and prevents an attack chain from being stitched together across different process IDs. Dedicated synthetic fixtures run in fast CI. Additional schema adapters, explicit provenance/hash matching between sample and trace, and broader sandbox-specific fixtures remain open.
+
 ### 1.6 Calibrate risk scoring and preserve evidence
 
 **Relevant files:** `scripts/lib/HeuristicScorer.java`, `ApiTagger.java`, `EntropyAnalyzer.java`, `ShellcodeDetector.java`, all report writers.

@@ -45,113 +45,213 @@ ATTACK_CHAINS = [
     }
 ]
 
+def _api_key(value):
+    """Return a case-insensitive API identity without an optional library prefix."""
+    return str(value or "").strip().casefold().rsplit("!", 1)[-1]
+
+
 def load_trace(trace_path):
-    """Loads dynamic trace JSON, supporting CAPE/Cuckoo and generic formats."""
+    """Load generic lists, generic objects, or CAPE/Cuckoo behavior traces."""
     with open(trace_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    calls = []
-    # 1. Generic format: {"calls": [...]}
-    if "calls" in data:
-        calls = data["calls"]
-    # 2. CAPE / Cuckoo behavior format: {"behavior": {"processes": [{"calls": [...]}]}}
-    elif "behavior" in data and "processes" in data["behavior"]:
-        for proc in data["behavior"]["processes"]:
-            for c in proc.get("calls", []):
-                calls.append(c)
-    elif isinstance(data, list):
-        calls = data
+    network = {}
+    processes = []
+    raw_calls = []
+
+    if isinstance(data, list):
+        raw_calls = data
+    elif isinstance(data, dict):
+        network = data.get("network", {})
+        if not isinstance(network, dict):
+            network = {}
+        processes = data.get("processes", [])
+        if not isinstance(processes, list):
+            processes = []
+
+        if isinstance(data.get("calls"), list):
+            raw_calls = data["calls"]
+        else:
+            behavior = data.get("behavior")
+            behavior_processes = behavior.get("processes") if isinstance(behavior, dict) else None
+            if isinstance(behavior_processes, list):
+                processes = behavior_processes
+                for process_index, process in enumerate(behavior_processes):
+                    if not isinstance(process, dict):
+                        continue
+                    process_id = process.get("process_id")
+                    if process_id is None:
+                        process_id = process.get("pid")
+                    if process_id is None:
+                        process_id = process.get("processid")
+                    if process_id is None:
+                        process_id = f"process-{process_index}"
+                    process_name = process.get("process_name", process.get("name", ""))
+                    process_calls = process.get("calls", [])
+                    if not isinstance(process_calls, list):
+                        continue
+                    for call in process_calls:
+                        if isinstance(call, dict):
+                            enriched = dict(call)
+                            if enriched.get("process_id") is None:
+                                enriched["process_id"] = process_id
+                            if process_name and not enriched.get("process_name"):
+                                enriched["process_name"] = process_name
+                            raw_calls.append(enriched)
+                        elif isinstance(call, str):
+                            raw_calls.append({
+                                "api": call,
+                                "process_id": process_id,
+                                "process_name": process_name,
+                            })
+            # A valid object without recognized call collections represents an
+            # empty trace; malformed collection types are not iterated.
+    else:
+        raise ValueError("Trace JSON must be an object or an array of API calls.")
 
     normalized_calls = []
-    for c in calls:
-        if isinstance(c, str):
-            normalized_calls.append({"api": c, "category": "general"})
-        elif isinstance(c, dict):
-            api_name = c.get("api", c.get("name", c.get("function", "")))
-            if api_name:
-                normalized_calls.append({
-                    "api": api_name,
-                    "category": c.get("category", ""),
-                    "time": c.get("time", ""),
-                    "status": c.get("status", ""),
-                    "arguments": c.get("arguments", c.get("args", {}))
-                })
+    for call in raw_calls:
+        if isinstance(call, str):
+            api_name = call.strip()
+            call_data = {"category": "general"}
+        elif isinstance(call, dict):
+            api_name = call.get("api", call.get("name", call.get("function", "")))
+            api_name = str(api_name).strip() if api_name is not None else ""
+            call_data = call
+        else:
+            continue
+
+        if not api_name:
+            continue
+
+        process_value = call_data.get("process_id")
+        if process_value is None:
+            process_value = call_data.get("pid")
+        if process_value is None:
+            process_value = call_data.get("processid")
+        process_name = call_data.get("process_name", "")
+        process_value_object = call_data.get("process")
+        if isinstance(process_value_object, dict):
+            if process_value is None:
+                process_value = process_value_object.get(
+                    "process_id", process_value_object.get("pid", process_value_object.get("id"))
+                )
+            if not process_name:
+                process_name = process_value_object.get("name", "")
+        elif process_value is None and process_value_object is not None:
+            process_value = process_value_object
+
+        thread_id = call_data.get("thread_id", call_data.get("tid", call_data.get("threadId")))
+        time_value = call_data.get("time", call_data.get("timestamp", ""))
+
+        normalized = {
+            "api": api_name,
+            "category": call_data.get("category", ""),
+            "time": time_value,
+            "status": call_data.get("status", ""),
+            "arguments": call_data.get("arguments", call_data.get("args", {})),
+        }
+        if process_value is not None:
+            normalized["process_id"] = process_value
+        if process_name:
+            normalized["process_name"] = process_name
+        if thread_id is not None:
+            normalized["thread_id"] = thread_id
+        normalized_calls.append(normalized)
 
     return {
         "calls": normalized_calls,
-        "network": data.get("network", {}),
-        "processes": data.get("processes", [])
+        "network": network,
+        "processes": processes,
     }
 
 def match_sliding_chains(calls, window_size=10):
-    """Matches multi-step attack chains across a sliding window of sequential API calls."""
+    """Match ordered API sequences without combining calls from different processes."""
     matches = []
     if len(calls) < 2:
         return matches
 
-    api_names = [c["api"] for c in calls]
-
     for chain in ATTACK_CHAINS:
-        seq = chain["sequence"]
-        seq_len = len(seq)
+        sequence = chain["sequence"]
+        sequence_length = len(sequence)
 
-        for i in range(len(api_names)):
-            sub_window = api_names[i : i + window_size]
-            # Check if all sequence items appear in order in sub_window
-            seq_idx = 0
-            ev_indices = []
-            for w_idx, call_name in enumerate(sub_window):
-                if seq_idx < seq_len and (call_name == seq[seq_idx] or call_name.endswith(seq[seq_idx])):
-                    ev_indices.append(i + w_idx)
-                    seq_idx += 1
+        for start_index, first_call in enumerate(calls):
+            process_key = first_call.get("process_id", first_call.get("process_name"))
+            sequence_index = 0
+            evidence_indices = []
 
-            if seq_idx == seq_len:
+            for call_index in range(start_index, min(len(calls), start_index + window_size)):
+                call = calls[call_index]
+                candidate_process = call.get("process_id", call.get("process_name"))
+                if candidate_process != process_key:
+                    continue
+
+                call_name = _api_key(call.get("api", ""))
+                expected_name = _api_key(sequence[sequence_index]) if sequence_index < sequence_length else ""
+                if sequence_index < sequence_length and call_name.endswith(expected_name):
+                    evidence_indices.append(call_index)
+                    sequence_index += 1
+
+            if sequence_index == sequence_length:
                 matches.append({
                     "name": chain["name"],
                     "technique": chain["technique"],
                     "weight": chain["weight"],
-                    "sequence": seq,
-                    "start_call_index": ev_indices[0],
-                    "end_call_index": ev_indices[-1]
+                    "sequence": sequence,
+                    "start_call_index": evidence_indices[0],
+                    "end_call_index": evidence_indices[-1],
                 })
-                break # Matched this chain once
+                break  # Report each chain at most once.
 
     return matches
 
 def correlate_static_and_dynamic(static_data, dynamic_data):
-    """Correlates static Ghidra report with runtime dynamic behavior."""
-    static_apis = set()
+    """Correlate static API names and runtime calls using case-insensitive identities."""
+    static_names = []
     for item in static_data.get("suspicious_apis", []):
+        if not isinstance(item, dict):
+            continue
         fn = item.get("function", "")
-        if fn: static_apis.add(fn)
+        if fn:
+            static_names.append(str(fn).strip())
 
+    static_by_key = {}
+    for name in static_names:
+        key = _api_key(name)
+        if key:
+            static_by_key.setdefault(key, name)
+
+    dynamic_by_key = {}
     dynamic_calls = dynamic_data.get("calls", [])
-    dynamic_api_counts = {}
-    for c in dynamic_calls:
-        api = c["api"]
-        dynamic_api_counts[api] = dynamic_api_counts.get(api, 0) + 1
+    if not isinstance(dynamic_calls, list):
+        dynamic_calls = []
+    for call in dynamic_calls:
+        if not isinstance(call, dict):
+            continue
+        api = str(call.get("api", "")).strip()
+        key = _api_key(api)
+        if key:
+            dynamic_by_key.setdefault(key, api)
 
-    dynamic_apis = set(dynamic_api_counts.keys())
+    static_keys = set(static_by_key)
+    dynamic_keys = set(dynamic_by_key)
 
-    # 1. Confirmed APIs: Present in static imports AND called dynamically
-    confirmed = sorted(list(static_apis & dynamic_apis))
-
-    # 2. Dynamically Resolved APIs: Called at runtime but NOT in static imports
-    hidden = sorted([a for a in dynamic_apis if a not in static_apis and not a.startswith("__")])
-
-    # 3. Dormant APIs: Statically imported but never observed executing
-    dormant = sorted([a for a in static_apis if a not in dynamic_apis])
-
-    # 4. Attack chains via sliding call window
+    # Preserve familiar names in the report while matching identity case-insensitively.
+    confirmed = sorted(static_by_key[key] for key in static_keys & dynamic_keys)
+    hidden = sorted(
+        api for key, api in dynamic_by_key.items()
+        if key not in static_keys and not api.startswith("__")
+    )
+    dormant = sorted(static_by_key[key] for key in static_keys - dynamic_keys)
     chains = match_sliding_chains(dynamic_calls, window_size=12)
 
     return {
         "total_dynamic_calls": len(dynamic_calls),
-        "unique_dynamic_apis": len(dynamic_apis),
+        "unique_dynamic_apis": len(dynamic_keys),
         "confirmed_apis": confirmed,
         "hidden_dynamic_apis": hidden,
         "dormant_apis": dormant,
-        "matched_chains": chains
+        "matched_chains": chains,
     }
 
 def print_correlation_report(static_file, trace_file, results):

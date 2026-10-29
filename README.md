@@ -387,12 +387,15 @@ python3 -m compileall -q scripts tests
 bash tests/test_run_headless.sh
 python3 tests/test_dashboard_security.py
 python3 tests/test_firmware_carver.py
+python3 tests/test_trace_correlator.py
 ```
 
 The launcher regression test mocks the Ghidra commands and checks standard and
 Flatpak invocation plus invalid `JAVA_HOME`. The dashboard security tests start a
 local HTTP server and cover path traversal, symlink escapes, escaped HTML values,
 security headers/CSP, loopback binding, and bounded responses.
+The trace-correlation tests exercise list-shaped generic traces, CAPE process events,
+case-insensitive API matching, malformed event entries, and process-isolated attack chains.
 
 ### Full Ghidra-backed integration suite
 
