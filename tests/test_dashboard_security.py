@@ -82,18 +82,26 @@ class DashboardSecurityTests(unittest.TestCase):
 
     def test_report_and_search_apis_use_the_indexed_output_identity(self):
         output_key = "sample_bin_1234567890_abcdef123456"
+        second_output_key = "sample_bin_0987654321_fedcba654321"
         output_path = os.path.join(self.output_dir, output_key)
+        second_output_path = os.path.join(self.output_dir, second_output_key)
         os.makedirs(output_path)
+        os.makedirs(second_output_path)
         json_path = os.path.join(output_path, "sample_report.json")
+        second_json_path = os.path.join(second_output_path, "sample_report.json")
         with open(json_path, "w", encoding="utf-8") as handle:
-            handle.write('{"file": "sample.bin"}')
+            handle.write('{"file": "sample.bin", "origin": "first"}')
         with open(os.path.join(output_path, "report_latest.json"), "w", encoding="utf-8") as handle:
-            handle.write('{"file": "sample.bin"}')
+            handle.write('{"file": "sample.bin", "origin": "first"}')
+        with open(second_json_path, "w", encoding="utf-8") as handle:
+            handle.write('{"file": "sample.bin", "origin": "second"}')
+        with open(os.path.join(second_output_path, "report_latest.json"), "w", encoding="utf-8") as handle:
+            handle.write('{"file": "sample.bin", "origin": "second"}')
 
         connection = sqlite3.connect(dashboard.DB_PATH)
         connection.executescript("""
             CREATE TABLE reports (
-                id INTEGER PRIMARY KEY, file TEXT UNIQUE, timestamp TEXT,
+                id INTEGER PRIMARY KEY, file TEXT, timestamp TEXT,
                 format_label TEXT, risk_score INTEGER, risk_level TEXT,
                 md5 TEXT, sha256 TEXT, imphash TEXT, function_count INTEGER,
                 json_path TEXT
@@ -111,14 +119,21 @@ class DashboardSecurityTests(unittest.TestCase):
                 description TEXT, mitre TEXT, weight INTEGER
             );
         """)
-        connection.execute(
+        connection.executemany(
             "INSERT INTO reports VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (1, "sample.bin", "2026-10-29T10:00:00Z", "PE", 70, "HIGH",
-             "md5", "sha256", "", 10, json_path),
+            [
+                (1, "sample.bin", "2026-10-29T10:00:00Z", "PE", 70, "HIGH",
+                 "md5-a", "sha256-a", "", 10, json_path),
+                (2, "sample.bin", "2026-10-29T11:00:00Z", "ELF", 80, "HIGH",
+                 "md5-b", "sha256-b", "", 11, second_json_path),
+            ],
         )
-        connection.execute(
+        connection.executemany(
             "INSERT INTO suspicious_apis VALUES (?, ?, ?, ?, ?, ?)",
-            (1, 1, "KERNEL32.dll", "CreateRemoteThread", "T1055", "injection"),
+            [
+                (1, 1, "KERNEL32.dll", "CreateRemoteThread", "T1055", "injection"),
+                (2, 2, "KERNEL32.dll", "CreateRemoteThread", "T1055", "injection"),
+            ],
         )
         connection.commit()
         connection.close()
@@ -126,17 +141,22 @@ class DashboardSecurityTests(unittest.TestCase):
         status, _headers, body = self.request("/api/reports")
         self.assertEqual(status, 200)
         reports = json.loads(body.decode("utf-8"))
-        self.assertEqual(reports[0]["file"], "sample.bin")
-        self.assertEqual(reports[0]["output_key"], output_key)
+        self.assertEqual(len(reports), 2)
+        self.assertEqual({report["file"] for report in reports}, {"sample.bin"})
+        self.assertEqual({report["output_key"] for report in reports}, {output_key, second_output_key})
 
         status, _headers, body = self.request("/api/search?q=CreateRemoteThread")
         self.assertEqual(status, 200)
         results = json.loads(body.decode("utf-8"))
-        self.assertEqual(results["sample.bin"]["output_key"], output_key)
+        self.assertEqual(set(results), {output_key, second_output_key})
+        self.assertEqual({result["file"] for result in results.values()}, {"sample.bin"})
 
         status, _headers, body = self.request(f"/output/{output_key}/report_latest.json")
         self.assertEqual(status, 200)
-        self.assertIn(b'"file": "sample.bin"', body)
+        self.assertIn(b'"origin": "first"', body)
+        status, _headers, body = self.request(f"/output/{second_output_key}/report_latest.json")
+        self.assertEqual(status, 200)
+        self.assertIn(b'"origin": "second"', body)
 
     def test_traversal_and_symlink_escape_are_rejected(self):
         escaped_link = os.path.join(self.sample_dir, "escaped.txt")
