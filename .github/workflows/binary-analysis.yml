@@ -47,6 +47,9 @@ jobs:
       - name: Test report generation exit-status handling
         run: bash tests/test_report_generation.sh
 
+      - name: Test atomic report-latest publication
+        run: python3 tests/test_atomic_publish.py
+
       - name: Test same-output concurrency locking
         run: bash tests/test_output_lock.sh
 
