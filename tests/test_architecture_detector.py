@@ -146,9 +146,9 @@ class ArchitectureDetectorTests(unittest.TestCase):
     def test_n64_byte_order_magics_and_psx_header_are_validated(self):
         with tempfile.TemporaryDirectory() as temp:
             for magic, suffix in (
-                (b"\\x80\\x37\\x12\\x40", ".z64"),
-                (b"\\x37\\x80\\x40\\x12", ".v64"),
-                (b"\\x40\\x12\\x37\\x80", ".n64"),
+                (b"\x80\x37\x12\x40", ".z64"),
+                (b"\x37\x80\x40\x12", ".v64"),
+                (b"\x40\x12\x37\x80", ".n64"),
             ):
                 rom = bytearray(0x40)
                 rom[:4] = magic
@@ -156,7 +156,7 @@ class ArchitectureDetectorTests(unittest.TestCase):
                 path = write_fixture(temp, "game" + suffix, bytes(rom))
                 self.assertEqual(detector.inspect_file(path)["format"], "n64")
 
-            short_n64 = detector.inspect_file(write_fixture(temp, "truncated.z64", b"\\x80\\x37\\x12\\x40"))
+            short_n64 = detector.inspect_file(write_fixture(temp, "truncated.z64", b"\x80\x37\x12\x40"))
             self.assertEqual(short_n64["format"], "raw")
             self.assertIn("truncated or invalid", short_n64["evidence"])
             short_psx = detector.inspect_file(write_fixture(temp, "bad.psx", b"PS-X EXE" + b"\x00" * 20))
