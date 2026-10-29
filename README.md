@@ -46,8 +46,8 @@ Markdown file, a standalone HTML page, a SARIF run, a YARA rule and a MISP event
 | **Triage first, data second** | Every report opens with a 0–100 score and the specific indicators that produced it. The 3,000-line dump is below the fold, not above it. |
 | **Priority, not address order** | Functions are scored on inbound xrefs, call density, suspicious-API reachability and size. The disassembly and decompiler excerpts follow that ranking, not the memory map. |
 | **Sees through obfuscation** | Stack strings are reconstructed from immediate `MOV` sequences, and a P-code emulator runs loop-dense functions to recover runtime-built and XOR-decoded strings. |
-| **Rules live outside the code** | Capability detection is YAML (`rules/*.yaml`), evaluated at instruction, block and function scope — capa-style — so detections can be added without touching Java. |
-| **Not just PE/ELF** | SNES, GBA, N64, PS1, stripped Go, UEFI volumes and bare-metal ARM via CMSIS-SVD all have first-class loader paths. |
+| **Rules live outside the code** | Capability detection rules are YAML (`rules/*.yaml`) and can change without Java edits; the current evaluator matches aggregate report metadata, not true instruction/block/function analysis. |
+| **Beyond PE/ELF** | The CLI detects SNES, GBA, N64, and PS1 formats and has raw fallbacks; community console/firmware loaders must be installed separately and are not bundled in the base container. |
 | **Ends in a pipeline, not a file** | SARIF for code scanning, MISP for threat intel, YARA for hunting, searchable SQLite history, webhooks for alerting. |
 
 ---
@@ -300,7 +300,7 @@ that reads only from that container.
 | `svd_injector.py` | `--svd` | Parses vendor CMSIS-SVD XML into peripheral base addresses, register offsets and IRQ vectors for bare-metal ARM Cortex-M / MIPS. |
 | `capability_engine.py` | `--rules` | Evaluates `rules/*.yaml` with AND/OR/NOT and N-of-M logic across instruction, block and function scope. |
 | `trace_correlator.py` | `--trace` | Correlates a CAPE/DRAKVUF sandbox trace against the static import set using a sliding call window, so multi-step behaviours (alloc → write → create thread) match as one capability. |
-| `index_report.py` | *(automatic)* | Indexes the latest report per filename into `output/reports.db`; `--search` and the dashboard use `LIKE` queries over filenames/hashes, suspicious APIs, IOCs, and indicators. |
+| `index_report.py` | *(automatic)* | Indexes each completed JSON report path into `output/reports.db`; separate runs and same-basename inputs remain distinct. `--search` and dashboard searches use SQLite `LIKE` over selected metadata, hashes, suspicious APIs, IOCs, and indicators (not FTS5). |
 | `dashboard.py` | `--dashboard` | Standalone `http.server` UI + REST API. Loopback by default; `GHIDRA_DASHBOARD_HOST` opts into another bind address. |
 
 ### Format support
@@ -447,8 +447,7 @@ open roadmap work.
 The integration suite is intended to cover the seven report artifacts, scoring,
 MISP/SARIF output, SNES header/MMIO/DMA extraction, semantic diffing, firmware
 carving, history search, capability and trace engines, SVD injection, file-type
-detection, packaging, and Java compilation. Those behaviors should be reported
-as verified only after that suite passes in a configured Ghidra environment.
+detection, packaging, and Java compilation. The default CI now verifies the core PE path in the pinned Ghidra 12.2 container, including all seven non-empty reports and JSON/SARIF/MISP envelopes. SNES analysis, extension-backed loaders, and the remainder of the broader suite should be reported as verified only after those checks pass in a configured Ghidra environment.
 
 No test reads samples from `ingress/`; fixtures are generated in temporary
 locations, and real analysis samples should remain git-ignored.
