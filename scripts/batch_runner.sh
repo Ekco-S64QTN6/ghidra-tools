@@ -3,7 +3,7 @@
 # Source this file; call run_batch_workers <max_jobs> <function_name> <args...>.
 
 run_batch_workers() {
-    if [[ $# -lt 2 ]]; then
+    if [[ $# -lt 3 ]]; then
         printf '[ERROR] run_batch_workers requires a worker count, function name, and at least one item.\n' >&2
         return 2
     fi
