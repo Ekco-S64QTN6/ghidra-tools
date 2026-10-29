@@ -373,36 +373,44 @@ SARIF output to GitHub Code Scanning.
 
 ## Testing
 
-```bash
-./tests/run_tests.sh
-```
+### Fast checks (no Ghidra required)
 
-The headless launcher also has a standalone mocked regression test that needs no Ghidra install:
+These are the deterministic checks run by the default GitHub Actions workflow:
 
 ```bash
+python3 -m compileall -q scripts tests
+./ghidra-report.sh --help >/dev/null
 bash tests/test_run_headless.sh
 python3 tests/test_dashboard_security.py
 ```
 
-The dashboard security regression test uses only Python's standard library; it checks traversal and symlink escapes, response limits, safe headers, XSS escaping, and loopback binding. It also exercises the HTML escaping helper with Node.js when available.
+The launcher regression test mocks the Ghidra commands and checks standard and
+Flatpak invocation plus invalid `JAVA_HOME`. The dashboard security tests start a
+local HTTP server and cover path traversal, symlink escapes, escaped HTML values,
+security headers/CSP, loopback binding, and bounded responses.
 
-The suite is self-contained: `tests/make_fixtures.py` synthesizes its own samples,
-so a fresh clone runs the whole thing. Nothing is read from `ingress/` — that is a
-drop folder for whatever you are actually triaging, its contents are git-ignored,
-and a test suite has no business depending on it.
+### Full Ghidra-backed integration suite
 
-Two fixtures are generated from code:
+```bash
+./tests/run_tests.sh
+```
 
-| Fixture | What it exercises |
-|:--|:--|
-| `packed_sample.dll` | A structurally valid PE32 carrying every signal the scorer reads — a `.themida` RWX section, a maximum-entropy `.boot` section, both x86 GetPC shellcode idioms, and a real import table of ATT&CK-tagged APIs. Asserts a 100/100 CRITICAL verdict. |
-| `console_sample.sfc` | A 64 KB LoROM cartridge with a checksum-valid header and 65816 code driving >10 PPU registers plus DMA and HDMA channel setups. Asserts header parsing, vector seeding, and MMIO/DMA extraction. |
+This suite generates its PE and SNES fixtures, but the analysis itself requires a
+compatible Ghidra installation and Java. The script also currently checks for
+community extensions in a Flatpak-specific directory under
+`~/.config/ghidra/ghidra_12.1.3_FLATPAK/Extensions`, so it is **not yet portable to a
+fresh checkout or part of default CI**. Removing that assumption and running the
+full headless/schema suite in a pinned, reproducible environment remain open
+roadmap work.
 
-Checks cover all seven output formats, threat scoring, MISP and SARIF schema
-validity, SNES header/MMIO/DMA extraction, the semantic diff, firmware carving,
-the SQLite search, the dashboard's REST endpoints, the capability and trace
-engines, SVD injection, loader auto-detection, the release packager, and a clean
-compile of the whole Java pipeline.
+The integration suite is intended to cover the seven report artifacts, scoring,
+MISP/SARIF output, SNES header/MMIO/DMA extraction, semantic diffing, firmware
+carving, history search, capability and trace engines, SVD injection, file-type
+detection, packaging, and Java compilation. Those behaviors should be reported
+as verified only after that suite passes in a configured Ghidra environment.
+
+No test reads samples from `ingress/`; fixtures are generated in temporary
+locations, and real analysis samples should remain git-ignored.
 
 ---
 
