@@ -58,7 +58,7 @@ Semantic differential analysis comparing memory layouts, entropy shifts, and API
 Launch the built-in dark-mode web dashboard on localhost (default: 8080).
 .TP
 .BI \-\s-1\-\s0search " <TERM>"
-Search the SQLite report history using case-insensitive LIKE matching over report filenames and hashes, suspicious APIs, IOCs, and threat indicators. Extracted strings and symbols are not currently indexed. Each JSON report path is indexed idempotently; separate report paths with identical filenames are retained as separate records. This is not an FTS5 index.
+Search the SQLite report history using case-insensitive LIKE matching over report metadata, hashes, suspicious APIs, IOCs, and threat indicators, plus SQLite FTS5 over extracted/recovered strings, function names/symbols, exports, rules, capabilities, and findings stored in selected JSON report fields. Each canonical JSON report path is indexed idempotently; separate report paths with identical filenames are retained as separate records. Existing historical rows are migrated, but older text fields are available to FTS only after those report JSON files are re-indexed.
 .SH RUNTIME REQUIREMENTS
 The default container pins Ghidra 12.2 and JDK 25 and verifies the official Ghidra archive SHA-256 during image build. Ghidra 12.2 requires at least JDK 25. For host or Flatpak installs, use the JDK supported by that installed Ghidra release. The headless launcher prints the detected Ghidra installation path/version and Java runtime; this diagnostic does not verify that optional community loaders are installed.
 .SH OUTPUT ARTIFACTS
