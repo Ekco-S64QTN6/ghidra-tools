@@ -61,7 +61,7 @@ These findings come from source inspection, not a successful execution of the pr
 - Unsupported Ghidra/Java combinations fail early with a useful error.
 - Loader fallback is tested against both a successful import and an expected failure.
 
-**Incremental progress — 2026-10-29:** The launcher now honors an explicit or discovered `GHIDRA_ROOT`, validates `JAVA_HOME`, calls `support/analyzeHeadless` for standard installs, and derives the Flatpak JDK for the existing direct-JVM workaround. A mock-based regression test covers both launcher paths and invalid Java configuration. This does **not** close the gate: the Docker/Ghidra version mismatch, clean-container runtime smoke test, dependency/version diagnostics, and import-fallback failure handling remain open.
+**Incremental progress — 2026-10-29:** The launcher now honors an explicit or discovered `GHIDRA_ROOT`, validates `JAVA_HOME`, calls `support/analyzeHeadless` for standard installs, and derives the Flatpak JDK for the existing direct-JVM workaround. A mock-based regression test covers both launcher paths and invalid Java configuration. The previously added log helper is now used by both the primary import and SNES fallback; each command's nonzero exit is preserved through `tee`/filtering, and an unrecognized failure status can no longer be reported as successful import merely because expected error text was absent. Synthetic tests cover command exit propagation and invalid filter mode. This does **not** close the gate: the Docker/Ghidra version mismatch, clean-container runtime smoke test, dependency/version diagnostics, and real Ghidra loader-fallback acceptance tests remain open.
 
 ### 0.3 Turn CI into real, deterministic verification
 
