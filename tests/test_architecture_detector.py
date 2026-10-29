@@ -47,7 +47,7 @@ def make_pe():
 def make_snes():
     data = bytearray(b"\xFF" * 0x10000)
     header_offset = 0x7FC0
-    data[header_offset:header_offset + 21] = b"DETECTION TEST ROM    "
+    data[header_offset:header_offset + 21] = b"DETECTION TEST ROM   "
     data[header_offset + 21] = 0x20
     struct.pack_into("<HH", data, header_offset + 28, 0x1234, 0xEDCB)
     struct.pack_into("<H", data, header_offset + 60, 0x8000)
