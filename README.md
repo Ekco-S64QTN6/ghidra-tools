@@ -93,7 +93,7 @@ Concurrent invocations for the same output identity are serialized across projec
 | Artifact | What it is for |
 |:--|:--|
 | **`.txt`** | The analyst's read. Triage box, memory map with entropy, ATT&CK table, IOCs, ranked disassembly, decompiled C. |
-| **`.json`** | The machine's read. Full structured model — feeds `--diff`, `--search`, the dashboard, and any SIEM/SOAR you point at it. |
+| **`.json`** | The machine's read. Versioned structured model (`schema_version: 1.0.0`) — feeds `--diff`, `--search`, the dashboard, and SIEM/SOAR consumers. Contract: [`schemas/report-v1.schema.json`](schemas/report-v1.schema.json). |
 | **`.md`** | Paste into a PR, an issue or an incident ticket. |
 | **`.html`** | Self-contained dark-mode page. No CDN, no assets, no network. Mail it. |
 | **`.sarif`** | OASIS SARIF v2.1.0 — uploads straight to GitHub Code Scanning. |
@@ -404,15 +404,18 @@ fixture report.
 
 ### Fast checks (no Ghidra required)
 
-These are the deterministic checks run by the default GitHub Actions workflow:
+These are the deterministic checks run by the default GitHub Actions workflow. To run the Python checks locally, install `requirements-rules.txt` and `requirements-test.txt`; the Java escaping regression also needs `javac` and `java` on `PATH`. Ghidra is not required for this lane.
 
 ```bash
 python3 -m compileall -q scripts tests
+python3 tests/test_report_schema.py
+python3 tests/test_report_format.py
 python3 tests/test_architecture_detector.py
 python3 tests/test_project_identity.py
 ./ghidra-report.sh --help >/dev/null
 bash tests/test_run_headless.sh
 bash tests/test_headless_log.sh
+bash tests/test_snes_fallback.sh
 bash tests/test_report_generation.sh
 bash tests/test_batch_runner.sh
 python3 tests/test_dashboard_security.py

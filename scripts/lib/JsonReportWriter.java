@@ -25,6 +25,7 @@ public class JsonReportWriter {
         try (PrintWriter out = new PrintWriter(new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
             out.println("{");
             out.println("  \"file\": \"" + escapeJson(p.getName()) + "\",");
+            out.println("  \"schema_version\": \"1.0.0\",");
             out.println("  \"format\": \"" + escapeJson(p.getExecutableFormat()) + "\",");
             out.println("  \"format_label\": \"" + escapeJson(d.formatLabel) + "\",");
             out.println("  \"generated\": \"" + new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX").format(new Date()) + "\",");

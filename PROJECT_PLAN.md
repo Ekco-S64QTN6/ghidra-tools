@@ -1,6 +1,6 @@
 # Project Plan — ghidra-report
 
-**Status: feature-complete.** All seven phases below are implemented; the boxes record what shipped. There is no open backlog. The earlier external "Feature Gap Plan" (CAPA-style rules, FLOSS-style emulation, SARIF, firmware carving, SVD, parallel execution) was fully absorbed into Phases 3A, 5 and 6.
+**Status: historical implementation inventory, not release sign-off.** Checkboxes record features implemented during the initial project phases; they do not imply security review, complete integration coverage, or release readiness. Open correctness, deployment, data-contract, and verification work is tracked in [`ROADMAP.md`](ROADMAP.md). The earlier external "Feature Gap Plan" (CAPA-style rules, FLOSS-style emulation, SARIF, firmware carving, SVD, parallel execution) was absorbed into Phases 3A, 5 and 6, with remaining gaps called out in the roadmap.
 
 ## Vision
 
@@ -54,7 +54,7 @@ The current approach dumps the first 15 functions sequentially regardless of imp
 - [x] Fall back gracefully if the decompiler times out or fails on a function
 
 ### Output Format Expansion
-- [x] **JSON output** — machine-readable `.json` alongside every `.txt` report; enables SIEM/SOAR ingestion, grep pipelines, and report diffing
+- [x] **JSON output** — machine-readable `.json` alongside every `.txt` report; current output declares `schema_version: 1.0.0` and is specified by `schemas/report-v1.schema.json`; SIEM/SOAR ingestion and diffing still depend on the versioned consumer contract
 - [x] **Markdown output** — `.md` version for pasting into GitHub issues, wikis, and incident reports
 - [x] **HTML output** — self-contained styled HTML with syntax-highlighted disassembly; no external dependencies
 - [x] Add `--format txt|json|md|html|all` flag to `ghidra-report.sh`
