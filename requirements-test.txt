@@ -1,0 +1,2 @@
+# Test-only Python dependencies; not required by the ghidra-report runtime.
+jsonschema>=4.21,<5
