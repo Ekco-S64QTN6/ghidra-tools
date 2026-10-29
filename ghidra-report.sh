@@ -448,21 +448,70 @@ batch_process() {
     fi
 }
 
+# Resolve output paths without guessing when a basename has multiple source identities.
+resolve_output_directory() {
+    local target="$1"
+    if [ -d "$OUTPUT_DIR/$target" ]; then
+        printf '%s\n' "$OUTPUT_DIR/$target"
+        return 0
+    fi
+    if [ -d "$target" ]; then
+        printf '%s\n' "$target"
+        return 0
+    fi
+
+    local base safe candidate
+    base="$(basename "$target")"
+    safe="$(printf '%s' "$base" | tr -cs 'a-zA-Z0-9_' '_' | sed 's/^_*//;s/_*$//')"
+    safe="\${safe:0:72}"
+    if [ -z "$safe" ]; then
+        return 1
+    fi
+
+    local matches=()
+    for candidate in "$OUTPUT_DIR/\${safe}_"*; do
+        if [ -d "$candidate" ] && [ -f "$candidate/report_latest.json" ]; then
+            matches+=("$candidate")
+        fi
+    done
+
+    if [ "\${#matches[@]}" -eq 1 ]; then
+        printf '%s\n' "\${matches[0]}"
+        return 0
+    fi
+    if [ "\${#matches[@]}" -gt 1 ]; then
+        log_error "More than one output directory matches '$target'. Use a full output path or a specific output identity."
+        return 2
+    fi
+    return 1
+}
+
+resolve_report_path() {
+    local target="$1"
+    if [ -f "$target" ]; then
+        printf '%s\n' "$target"
+        return 0
+    fi
+    local output_dir
+    output_dir="$(resolve_output_directory "$target")" || return $?
+    if [ -f "$output_dir/report_latest.json" ]; then
+        printf '%s\n' "$output_dir/report_latest.json"
+        return 0
+    fi
+    return 1
+}
+
 # Compare two reports (JSON format) with standardized semantic findings lifecycle
 diff_reports() {
     local r1="$1"
     local r2="$2"
 
-    if [ -d "$OUTPUT_DIR/$r1" ] && [ -f "$OUTPUT_DIR/$r1/report_latest.json" ]; then
-        r1="$OUTPUT_DIR/$r1/report_latest.json"
-    elif [ -d "$r1" ] && [ -f "$r1/report_latest.json" ]; then
-        r1="$r1/report_latest.json"
+    local resolved_path
+    if resolved_path="$(resolve_report_path "$r1")"; then
+        r1="$resolved_path"
     fi
-
-    if [ -d "$OUTPUT_DIR/$r2" ] && [ -f "$OUTPUT_DIR/$r2/report_latest.json" ]; then
-        r2="$OUTPUT_DIR/$r2/report_latest.json"
-    elif [ -d "$r2" ] && [ -f "$r2/report_latest.json" ]; then
-        r2="$r2/report_latest.json"
+    if resolved_path="$(resolve_report_path "$r2")"; then
+        r2="$resolved_path"
     fi
 
     if [ ! -f "$r1" ] || [ ! -f "$r2" ]; then
@@ -658,8 +707,11 @@ evaluate_capabilities() {
             exit 1
         fi
     fi
-    if [ ! -f "$rep" ] && [ -f "$OUTPUT_DIR/$rep/report_latest.json" ]; then
-        rep="$OUTPUT_DIR/$rep/report_latest.json"
+    if [ ! -f "$rep" ]; then
+        local resolved_path
+        if resolved_path="$(resolve_report_path "$rep")"; then
+            rep="$resolved_path"
+        fi
     fi
     if [ ! -f "$rep" ]; then
         log_error "Report file not found: $rep"
@@ -680,8 +732,11 @@ correlate_trace() {
     if [ -z "$rep" ]; then
         rep="$(find "$OUTPUT_DIR" -name "report_latest.json" | head -n 1)"
     fi
-    if [ ! -f "$rep" ] && [ -f "$OUTPUT_DIR/$rep/report_latest.json" ]; then
-        rep="$OUTPUT_DIR/$rep/report_latest.json"
+    if [ ! -f "$rep" ]; then
+        local resolved_path
+        if resolved_path="$(resolve_report_path "$rep")"; then
+            rep="$resolved_path"
+        fi
     fi
     if [ ! -f "$rep" ]; then
         log_error "Static report file not found: $rep"
