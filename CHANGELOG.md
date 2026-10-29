@@ -7,3 +7,4 @@ All notable changes to this project are documented here.
 ### Fixed
 - Make the headless launcher honor `GHIDRA_ROOT` and `JAVA_HOME`, use Ghidra's supported launcher for standard installs, and retain the Flatpak direct-JVM workaround with paths derived from the detected installation.
 - Add mocked regression coverage for standard and Flatpak launcher selection and invalid Java configuration.
+- Restrict dashboard artifact access to canonical paths under `output/`, sandbox exported HTML, escape sample-derived UI values, apply defensive response headers and response limits, and bind to loopback unless explicitly configured.
