@@ -61,6 +61,8 @@ Launch the built-in dark-mode web dashboard on localhost (default: 8080).
 Search the SQLite report history using case-insensitive LIKE matching over report filenames and hashes, suspicious APIs, IOCs, and threat indicators. Extracted strings and symbols are not currently indexed. Each JSON report path is indexed idempotently; separate report paths with identical filenames are retained as separate records. This is not an FTS5 index.
 .SH OUTPUT ARTIFACTS
 Each analyzed input receives dedicated outputs in \fBoutput/<output_key>/\fR. The stable key contains a sanitized basename, canonical source-path hash, and content hash, so same-named inputs do not collide:
+.PP
+Exports are written to a private staging directory and moved into place only after the exporter succeeds. Each \fBreport_latest.*\fR symlink is replaced atomically, so readers do not observe a missing-link interval or a partially written linked file. The set of links for multiple formats is not switched as one transaction.
 .IP \(bu 2
 .B report_latest.txt
 \- Full human-readable plain-text analysis report.
