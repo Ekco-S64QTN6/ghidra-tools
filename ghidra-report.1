@@ -58,9 +58,9 @@ Semantic differential analysis comparing memory layouts, entropy shifts, and API
 Launch the built-in dark-mode web dashboard on localhost (default: 8080).
 .TP
 .BI \-\s-1\-\s0search " <TERM>"
-Search the SQLite report index using case-insensitive LIKE matching over report filenames and hashes, suspicious APIs, IOCs, and threat indicators. Extracted strings and symbols are not currently indexed; a repeated filename replaces its earlier index row. This is not an FTS5 index.
+Search the SQLite report history using case-insensitive LIKE matching over report filenames and hashes, suspicious APIs, IOCs, and threat indicators. Extracted strings and symbols are not currently indexed. Each JSON report path is indexed idempotently; separate report paths with identical filenames are retained as separate records. This is not an FTS5 index.
 .SH OUTPUT ARTIFACTS
-Each analyzed binary receives dedicated outputs in \fBoutput/<binary_name>/\fR:
+Each analyzed input receives dedicated outputs in \fBoutput/<output_key>/\fR. The stable key contains a sanitized basename, canonical source-path hash, and content hash, so same-named inputs do not collide:
 .IP \(bu 2
 .B report_latest.txt
 \- Full human-readable plain-text analysis report.
@@ -82,5 +82,7 @@ Each analyzed binary receives dedicated outputs in \fBoutput/<binary_name>/\fR:
 .IP \(bu 2
 .B report_latest.misp.json
 \- MISP standard Threat Event JSON format for direct threat intel platform ingestion.
+.PP
+The output key can be printed with \fBpython3 scripts/project_identity.py output <binary_path>\fR. Use that key with \fB\-\-diff\fR, \fB\-\-rules\fR, or \fB\-\-trace\fR to select a specific report. A basename is accepted only when it resolves to one output directory.
 .SH AUTHOR
 Google DeepMind Advanced Agentic Coding Pair Programmer.
