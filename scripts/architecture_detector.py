@@ -17,15 +17,16 @@ ELF_LANGUAGES = {
     62: {(2, 1): "x86:LE:64:default"},                     # EM_X86_64
     40: {(1, 1): "ARM:LE:32:v8", (1, 2): "ARM:BE:32:v8"},  # EM_ARM
     183: {(2, 1): "AARCH64:LE:64:v8A", (2, 2): "AARCH64:BE:64:v8A"},
+    # Ghidra's current MIPS64 "default" language definitions describe MIPS16e.
+    # Do not force MIPS64 until ELF ABI/ISA flags are parsed well enough to select
+    # an appropriate decoder; continue to recognize MIPS32 from class and endian.
     8: {                                                    # EM_MIPS
         (1, 1): "MIPS:LE:32:default",
         (1, 2): "MIPS:BE:32:default",
-        (2, 1): "MIPS:LE:64:default",
-        (2, 2): "MIPS:BE:64:default",
     },
     243: {                                                  # EM_RISCV (standard ELF is little-endian)
-        (1, 1): "RISCV:LE:32:RV32GC",
-        (2, 1): "RISCV:LE:64:RV64GC",
+        (1, 1): "RISCV:LE:32:default",
+        (2, 1): "RISCV:LE:64:default",
     },
     20: {                                                    # EM_PPC
         (1, 1): "PowerPC:LE:32:default",
