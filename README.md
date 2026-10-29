@@ -328,6 +328,10 @@ The core report pipeline, dashboard, carver, indexer, and trace correlator conti
 to use Python's standard library. The Docker image installs the OS-provided
 PyYAML package so `--rules` works there as well.
 
+The current rule engine evaluates features against aggregate report metadata;
+the rule `scope` label is descriptive and does not mean that instruction-, block-,
+or function-level feature extraction is implemented.
+
 ### Configuration
 
 `~/.config/ghidra-report/config.json` overrides the defaults:
