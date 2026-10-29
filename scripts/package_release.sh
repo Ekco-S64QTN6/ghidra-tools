@@ -19,6 +19,9 @@ cp -r "$SCRIPT_DIR/ghidra-report.sh" \
       "$SCRIPT_DIR/ghidra-report.1" \
       "$SCRIPT_DIR/README.md" \
       "$SCRIPT_DIR/LICENSE" \
+      "$SCRIPT_DIR/requirements-rules.txt" \
+      "$SCRIPT_DIR/requirements-test.txt" \
+      "$SCRIPT_DIR/schemas" \
       "$SCRIPT_DIR/scripts" \
       "$SCRIPT_DIR/rules" \
       "$SCRIPT_DIR/docs" \
