@@ -38,6 +38,12 @@ jobs:
       - name: Test portable headless launcher
         run: bash tests/test_run_headless.sh
 
+      - name: Test headless log exit-status preservation
+        run: bash tests/test_headless_log.sh
+
+      - name: Check shell script syntax
+        run: bash -n ghidra-report.sh scripts/headless_log.sh tests/test_headless_log.sh
+
       - name: Test batch failure propagation
         run: bash tests/test_batch_runner.sh
 
