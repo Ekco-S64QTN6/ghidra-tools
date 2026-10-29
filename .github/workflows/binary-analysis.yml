@@ -40,3 +40,6 @@ jobs:
 
       - name: Test trace correlator normalization
         run: python3 tests/test_trace_correlator.py
+
+      - name: Test history indexer field mapping
+        run: python3 tests/test_history_indexer.py

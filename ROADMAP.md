@@ -218,6 +218,8 @@ These findings come from source inspection, not a successful execution of the pr
 - Search returns fixture IOCs and findings; tests verify the timestamps and IOCs survive indexing.
 - A migration test upgrades an older database without losing saved reports.
 
+**Incremental progress — 2026-10-29:** The indexer now reads the report writer's `generated` timestamp and `iocs` array, while retaining fallbacks for older `timestamp` and `ioc_findings` reports. Indicator ATT&CK metadata is read from the current `mitre_id` field with a legacy `mitre` fallback. Synthetic SQLite tests cover both current and legacy report shapes in fast CI. The filename-unique run model, true FTS5 implementation, migrations, and search coverage expansion remain open.
+
 ### 1.9 Make parallel and batch execution reliable
 
 **Relevant files:** `ghidra-report.sh`, project naming, output path creation.
