@@ -8,12 +8,19 @@ class GhidraReport < Formula
 
   depends_on "openjdk@25"
   depends_on "python@3.12"
+  depends_on "pyyaml"
   depends_on "sqlite"
 
   def install
-    bin.install "ghidra-report.sh" => "ghidra-report"
+    libexec.install "ghidra-report.sh", "run-headless.sh", "VERSION", "requirements-rules.txt"
+    libexec.install "scripts", "rules", "schemas"
+
+    launcher = File.read("packaging/ghidra-report-launcher.sh.in")
+    launcher.gsub!("@APP_ROOT@", libexec.to_s)
+    (bin/"ghidra-report").write(launcher)
+    (bin/"ghidra-report").chmod 0755
+
     man1.install "ghidra-report.1"
-    pkgshare.install "scripts", "rules", "run-headless.sh"
   end
 
   test do
