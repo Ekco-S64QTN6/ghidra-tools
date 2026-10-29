@@ -10,7 +10,7 @@ experience required.
 [![Ghidra](https://img.shields.io/badge/Ghidra-12.x_headless-e74c3c?style=flat-square)](https://ghidra-sre.org/)
 [![Java](https://img.shields.io/badge/scripts-Java_21-f89820?style=flat-square&logo=openjdk&logoColor=white)](#architecture)
 [![Bash](https://img.shields.io/badge/CLI-bash_4%2B-4eaa25?style=flat-square&logo=gnubash&logoColor=white)](#cli-reference)
-[![Python](https://img.shields.io/badge/pipelines-python_3_stdlib-3776ab?style=flat-square&logo=python&logoColor=white)](#side-pipelines)
+[![Python](https://img.shields.io/badge/pipelines-python_stdlib_%2B_PyYAML_for_rules-3776ab?style=flat-square&logo=python&logoColor=white)](#side-pipelines)
 [![Formats](https://img.shields.io/badge/output-7_formats-6fc3df?style=flat-square)](#what-a-report-contains)
 [![ATT&CK](https://img.shields.io/badge/tagging-MITRE_ATT%26CK-9c6bff?style=flat-square)](#threat-triage)
 [![Tests](https://img.shields.io/badge/tests-self--contained-54e08a?style=flat-square)](#testing)
@@ -275,7 +275,7 @@ that reads only from that container.
         │                  │    └─ Yara/Sarif/Misp        │
         ▼                  └──────────────────────────────┘
 ┌────────────────────┐
-│  projects/         │     Side pipelines (pre/post Ghidra, Python stdlib only)
+│  projects/         │     Side pipelines (Python stdlib; PyYAML for rules)
 │  (Ghidra DB cache) │       firmware_carver.py   --carve
 │  --purge-projects  │       svd_injector.py      --svd
 └────────────────────┘       capability_engine.py --rules   (rules/*.yaml)
@@ -315,6 +315,18 @@ Rules are plain YAML in `rules/`. Eleven ship by default — process injection,
 hollowing, credential dumping, anti-debugging, dynamic resolution, persistence,
 input capture, network discovery, packer detection, cryptography and process
 execution. Add a file, and `--rules` picks it up.
+
+The YAML rule engine requires PyYAML; without it, rule evaluation now exits with
+an actionable error instead of silently loading zero rules. Install the optional
+dependency with:
+
+```bash
+python3 -m pip install -r requirements-rules.txt
+```
+
+The core report pipeline, dashboard, carver, indexer, and trace correlator continue
+to use Python's standard library. The Docker image installs the OS-provided
+PyYAML package so `--rules` works there as well.
 
 ### Configuration
 
@@ -389,6 +401,7 @@ python3 tests/test_dashboard_security.py
 python3 tests/test_firmware_carver.py
 python3 tests/test_trace_correlator.py
 python3 tests/test_history_indexer.py
+python3 tests/test_capability_engine.py
 ```
 
 The launcher regression test mocks the Ghidra commands and checks standard and

@@ -120,6 +120,8 @@ These findings come from source inspection, not a successful execution of the pr
 - Tests prove each advertised operator and scope, including malformed YAML and missing dependencies.
 - Output states which exact evidence matched and the relevant address/scope.
 
+**Incremental progress — 2026-10-29:** Added `requirements-rules.txt` for the optional PyYAML runtime dependency and installed the system PyYAML package in the Docker image. The rule engine no longer uses an incomplete top-level-only YAML fallback: missing PyYAML and malformed/incomplete rules now fail with a path-specific diagnostic rather than silently producing zero rule matches. Synthetic tests cover shipped rule loading, missing dependency behavior, malformed YAML, AND/OR/NOT/count operators, and a positive/negative process-injection rule example. True per-function/basic-block scope, full rule schema/IDs, and coverage fixtures for all shipped rules remain open.
+
 ### 1.3 Make string recovery and emulation evidence-driven
 
 **Relevant files:** `scripts/lib/EmulatorDeobfuscator.java`, `scripts/lib/StackStringDetector.java`, `scripts/lib/IocExtractor.java`, `scripts/ExportFullReport.java`.

@@ -15,33 +15,46 @@ try:
 except ImportError:
     yaml = None
 
+def require_yaml():
+    """Fail clearly instead of pretending rules loaded without a YAML parser."""
+    if yaml is None:
+        raise RuntimeError(
+            "PyYAML is required for capability rules. Install it with "
+            "'python3 -m pip install -r requirements-rules.txt'."
+        )
+
+
 def load_yaml_rule(filepath):
-    """Loads a YAML capability rule file."""
+    """Load one complete rule using PyYAML's safe loader."""
+    require_yaml()
     with open(filepath, "r", encoding="utf-8") as f:
-        content = f.read()
-    if yaml:
-        return yaml.safe_load(content)
-    # Minimal fallback parser if pyyaml is unavailable
-    rule = {}
-    for line in content.splitlines():
-        line = line.strip()
-        if line.startswith("name:"): rule["name"] = line.split(":", 1)[1].strip().strip("\"\x27")
-        elif line.startswith("namespace:"): rule["namespace"] = line.split(":", 1)[1].strip().strip("\"\x27")
-        elif line.startswith("scope:"): rule["scope"] = line.split(":", 1)[1].strip().strip("\"\x27")
-    return rule
+        return yaml.safe_load(f)
+
 
 def load_rules(rules_dir):
-    """Loads all YAML rules from directory."""
-    rules = []
+    """Load and validate the minimum structure of every rule or fail closed."""
+    require_yaml()
+    paths = []
     for ext in ("*.yaml", "*.yml"):
-        for path in glob.glob(os.path.join(rules_dir, ext)):
-            try:
-                r = load_yaml_rule(path)
-                if r and "name" in r and "features" in r:
-                    r["_filepath"] = path
-                    rules.append(r)
-            except Exception as e:
-                print(f"[WARN] Failed to load rule {path}: {e}", file=sys.stderr)
+        paths.extend(glob.glob(os.path.join(rules_dir, ext)))
+
+    rules = []
+    for path in sorted(paths):
+        try:
+            rule = load_yaml_rule(path)
+        except Exception as exc:
+            raise RuntimeError(f"Failed to load capability rule {path}: {exc}") from exc
+
+        if not isinstance(rule, dict):
+            raise RuntimeError(f"Invalid capability rule {path}: expected a YAML mapping.")
+        if not isinstance(rule.get("name"), str) or not rule["name"].strip():
+            raise RuntimeError(f"Invalid capability rule {path}: missing non-empty 'name'.")
+        if "features" not in rule or not isinstance(rule["features"], dict):
+            raise RuntimeError(f"Invalid capability rule {path}: missing mapping-valued 'features'.")
+
+        rule["_filepath"] = path
+        rules.append(rule)
+
     return rules
 
 def evaluate_node(node, context):
@@ -197,7 +210,11 @@ def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     rules_dir = sys.argv[3] if len(sys.argv) > 3 else os.path.join(script_dir, "..", "rules")
 
-    rules = load_rules(rules_dir)
+    try:
+        rules = load_rules(rules_dir)
+    except RuntimeError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(2)
 
     if action == "list":
         print(f"Loaded {len(rules)} rule(s) from: {rules_dir}")

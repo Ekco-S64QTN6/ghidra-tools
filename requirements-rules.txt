@@ -1,0 +1,2 @@
+# Optional runtime dependency for the YAML capability-rule engine.
+PyYAML>=6.0,<7

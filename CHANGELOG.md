@@ -13,3 +13,4 @@ All notable changes to this project are documented here.
 - Reject truncated U-Boot uImage payloads whose declared length exceeds the available input and add synthetic bounds regression tests.
 - Normalize top-level array and CAPE-style dynamic traces, preserve event metadata, compare API names case-insensitively, and prevent cross-process attack-chain matches.
 - Index current report timestamps, IOCs, and indicator ATT&CK IDs correctly while preserving compatibility with older field names.
+- Require an actual YAML parser for capability rules, fail visibly on missing dependencies or malformed rules, and add rule-loading/operator regression tests.
