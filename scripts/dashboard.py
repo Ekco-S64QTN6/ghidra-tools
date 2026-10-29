@@ -299,12 +299,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           <td>
             <div class="actions">
               <a class="btn btn-primary" href="/output/${encodeURIComponent(r.file)}/report_latest.html" target="_blank" rel="noopener noreferrer">HTML</a>
-              <a class="btn" href="/output/${r.file}/report_latest.txt" target="_blank" rel="noopener noreferrer">TXT</a>
-              <a class="btn" href="/output/${r.file}/report_latest.json" target="_blank" rel="noopener noreferrer">JSON</a>
-              <a class="btn" href="/output/${r.file}/report_latest.md" target="_blank" rel="noopener noreferrer">MD</a>
-              <a class="btn" href="/output/${r.file}/report_latest.sarif" target="_blank" rel="noopener noreferrer">SARIF</a>
-              <a class="btn" href="/output/${r.file}/report_latest.yar" target="_blank" rel="noopener noreferrer">YARA</a>
-              <a class="btn" href="/output/${r.file}/report_latest.misp.json" target="_blank" rel="noopener noreferrer">MISP</a>
+              <a class="btn" href="/output/${encodeURIComponent(r.file)}/report_latest.txt" target="_blank" rel="noopener noreferrer">TXT</a>
+              <a class="btn" href="/output/${encodeURIComponent(r.file)}/report_latest.json" target="_blank" rel="noopener noreferrer">JSON</a>
+              <a class="btn" href="/output/${encodeURIComponent(r.file)}/report_latest.md" target="_blank" rel="noopener noreferrer">MD</a>
+              <a class="btn" href="/output/${encodeURIComponent(r.file)}/report_latest.sarif" target="_blank" rel="noopener noreferrer">SARIF</a>
+              <a class="btn" href="/output/${encodeURIComponent(r.file)}/report_latest.yar" target="_blank" rel="noopener noreferrer">YARA</a>
+              <a class="btn" href="/output/${encodeURIComponent(r.file)}/report_latest.misp.json" target="_blank" rel="noopener noreferrer">MISP</a>
             </div>
           </td>
         </tr>
