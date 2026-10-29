@@ -418,13 +418,14 @@ process_binary() {
         return 1
     fi
 
-    # Serialize the entire operation for this output identity. This protects both
-    # the shared Ghidra project and report_latest.* publication when overlapping
-    # CLI invocations or batch jobs submit the same source identity concurrently.
+    # Serialize the whole operation for this identity. The lock protects the
+    # shared Ghidra project and report_latest.* updates across CLI invocations.
     if ! acquire_output_lock "$output_key"; then
         log_error "Skipping analysis because its report-output lock was not acquired."
         return 1
     fi
+    # Preserve lock cleanup even if errexit exits the shell during analysis.
+    trap 'release_output_lock' EXIT
 
     local process_status=0
     if [ -f "$PROJECTS_DIR/${project_name}.gpr" ] && [ "$force_reimport" != "true" ]; then
@@ -434,16 +435,17 @@ process_binary() {
         if ! import_and_analyze "$binary_path" "$project_name"; then
             log_error "Skipping report generation due to import failure."
             release_output_lock
+            trap - EXIT
             return 1
         fi
     fi
 
-    if generate_report "$project_name" "$binary_name" "$output_key"; then
-        process_status=0
-    else
-        process_status=$?
-    fi
+    # Call directly so shell errexit behavior remains intact; the EXIT trap
+    # releases the lock if report generation terminates the CLI on a failure.
+    generate_report "$project_name" "$binary_name" "$output_key"
+    process_status=$?
     release_output_lock
+    trap - EXIT
     return "$process_status"
 }
 
