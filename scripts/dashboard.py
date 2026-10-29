@@ -377,6 +377,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def end_headers(self):
         """Apply defensive browser headers to the UI, APIs, and report artifacts."""
         request_path = urlparse(self.path).path
+        for _ in range(8):
+            decoded_path = unquote(request_path)
+            if decoded_path == request_path:
+                break
+            request_path = decoded_path
         if request_path in ("/", "/index.html"):
             policy = (
                 "default-src 'self'; script-src 'self' 'unsafe-inline'; "
