@@ -238,7 +238,7 @@ Make it production-ready for security workflows, CI/CD, and threat intelligence 
 - [x] **MISP Event Export** — MISP-compatible JSON format (`.misp.json`) for threat intelligence ingestion
 
 ### Execution Engine & Storage Hygiene
-- [x] **Collision-Resistant Output Partitioning** — outputs in `output/<output_key>/`, keyed by sanitized basename, canonical path hash, and content hash; same-name reports remain separate in dashboard/history, with `report_latest.*` symlinks per identity
+- [x] **Collision-Resistant Output Partitioning** — outputs in `output/<output_key>/`, keyed by sanitized basename, canonical path hash, and content hash; same-name reports remain separate in dashboard/history; exports stage privately before each `report_latest.*` symlink is atomically replaced (multi-format link swaps are not one transaction)
 - [x] **Temporary Project Purging (`--purge-projects`)** — automated cleanup routine to purge transient `.rep` and `.gpr` databases
 - [x] **Parallel Worker Pool Dispatcher** — multi-process job queue (`--parallel` / `-j`) to analyze distinct output identities concurrently; cross-process locks serialize duplicate identities through import, analysis, export, and latest-link updates
 - [x] **Watch Mode Daemon** — inotify/polling ingress watcher (`--watch`) for zero-touch drop analysis
