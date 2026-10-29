@@ -57,54 +57,21 @@ JAVA_VERSION_OUTPUT="$("$JAVA_BIN" -version 2>&1)" || {
     echo "[ERROR] Could not query the selected Java runtime: $JAVA_BIN" >&2
     exit 1
 }
-JAVA_VERSION_LINE="${JAVA_VERSION_OUTPUT%%
-    # The Flatpak launch.sh wrapper can fail outside the sandbox. Derive the
-    # bundled JDK from the detected installation instead of hard-coding a host.
-    UTILITY_JAR="$GHIDRA_ROOT/Ghidra/Framework/Utility/lib/Utility.jar"
-    if [[ ! -f "$UTILITY_JAR" ]]; then
-        echo "[ERROR] Flatpak Ghidra Utility.jar was not found: $UTILITY_JAR" >&2
-        exit 1
-    fi
-
-    JAVA_BIN="$(command -v java)"
-    MAXMEM="${GHIDRA_HEADLESS_MAXMEM:-2G}"
-    export INSTALL_DIR="$GHIDRA_ROOT"
-
-    exec "$JAVA_BIN" \
-        -Xmx"$MAXMEM" \
-        -Djava.system.class.loader=ghidra.GhidraClassLoader \
-        -Djava.awt.headless=true \
-        -XX:ParallelGCThreads=2 \
-        -XX:CICompilerCount=2 \
-        -Xshare:off \
-        --enable-native-access=ALL-UNNAMED \
-        -Dpython.console.encoding=UTF-8 \
-        -cp "$UTILITY_JAR" \
-        ghidra.GhidraLauncher \
-        ghidra.app.util.headless.AnalyzeHeadless \
-        "$@"
-fi
-
-HEADLESS_LAUNCHER="$GHIDRA_ROOT/support/analyzeHeadless"
-if [[ ! -x "$HEADLESS_LAUNCHER" ]]; then
-    echo "[ERROR] Ghidra headless launcher is not executable: $HEADLESS_LAUNCHER" >&2
-    echo "        Set GHIDRA_ROOT to a supported Ghidra installation directory." >&2
-    exit 1
-fi
-
-exec "$HEADLESS_LAUNCHER" "$@"
-\\n'*}"
+JAVA_VERSION_LINE="$(echo "$JAVA_VERSION_OUTPUT" | sed -n '1p')"
 GHIDRA_VERSION=""
 for properties_path in "$GHIDRA_ROOT/Ghidra/application.properties" "$GHIDRA_ROOT/application.properties"; do
     if [[ -r "$properties_path" ]]; then
-        GHIDRA_VERSION="$(awk -F= '/^[[:space:]]*application\\.version[[:space:]]*=/ { sub(/^[^=]*=/, ""); gsub(/^[[:space:]]+|[[:space:]]+$/, ""); print; exit }' "$properties_path")"
+        GHIDRA_VERSION="$(awk -F= '/^[[:space:]]*application[.]version[[:space:]]*=/ { sub(/^[^=]*=/, ""); gsub(/^[[:space:]]+|[[:space:]]+$/, ""); print; exit }' "$properties_path")"
         if [[ -n "$GHIDRA_VERSION" ]]; then
             break
         fi
     fi
 done
+if [[ -z "$GHIDRA_VERSION" ]]; then
+    GHIDRA_VERSION="unknown (version metadata missing)"
+fi
 echo "[INFO] Ghidra root: $GHIDRA_ROOT"
-echo "[INFO] Ghidra version: ${GHIDRA_VERSION:-unknown (version metadata missing)}"
+echo "[INFO] Ghidra version: $GHIDRA_VERSION"
 echo "[INFO] Java runtime: $JAVA_VERSION_LINE"
 
 if [[ "$FLATPAK_MODE" == true ]]; then
