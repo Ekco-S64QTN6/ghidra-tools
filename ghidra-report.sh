@@ -324,8 +324,15 @@ generate_report() {
 
     local txt_report="${report_base}.txt"
     local json_report="${report_base}.json"
+    local has_report=false
+    for ext in txt json md html sarif yar misp.json; do
+        if [ -f "${report_base}.${ext}" ]; then
+            has_report=true
+            break
+        fi
+    done
 
-    if [ -f "$txt_report" ] || [ -f "$json_report" ]; then
+    if [ "$has_report" = true ]; then
         echo ""
         log_success "Reports generated successfully in: ${BOLD}$file_output_dir${NC}"
 
