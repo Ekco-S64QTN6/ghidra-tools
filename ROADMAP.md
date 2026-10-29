@@ -222,6 +222,8 @@ These findings come from source inspection, not a successful execution of the pr
 
 **Incremental progress — 2026-10-29:** The indexer now reads the report writer's `generated` timestamp and `iocs` array, while retaining fallbacks for older `timestamp` and `ioc_findings` reports. Indicator ATT&CK metadata is read from the current `mitre_id` field with a legacy `mitre` fallback. Synthetic SQLite tests cover both current and legacy report shapes in fast CI. The filename-unique run model, true FTS5 implementation, migrations, and search coverage expansion remain open.
 
+**Documentation correction — 2026-10-29:** README, man page, and project-plan search claims now describe the implementation actually present: ordinary SQLite `LIKE` queries over report filename/hash metadata, suspicious APIs, IOCs, and indicators. The docs no longer claim that FTS5, extracted-string/symbol search, or immutable per-run history exists. This narrows the claims without closing the 1.8 implementation gate.
+
 ### 1.9 Make parallel and batch execution reliable
 
 **Relevant files:** `ghidra-report.sh`, project naming, output path creation.
