@@ -217,8 +217,22 @@ Every run is indexed into `output/reports.db` (SQLite + FTS5):
 ./ghidra-report.sh --search "CreateRemoteThread"
 ./ghidra-report.sh --search "Themida"
 ./ghidra-report.sh --search 10bce0b1
-./ghidra-report.sh --dashboard 8080        # or browse it
+./ghidra-report.sh --dashboard 8080
 ```
+
+The dashboard binds to `127.0.0.1` by default. To opt into a non-loopback
+interface, set `GHIDRA_DASHBOARD_HOST` explicitly:
+
+```bash
+GHIDRA_DASHBOARD_HOST=0.0.0.0 ./ghidra-report.sh --dashboard 8080
+```
+
+**The dashboard has no authentication.** Only bind it to non-loopback interfaces
+on a trusted, protected network. The Docker Compose configuration binds inside
+the container but publishes the port on host loopback only (`127.0.0.1:8080`);
+change that mapping only when you have an appropriate access-control boundary.
+Report HTML is served with a restrictive CSP sandbox, and artifact routes are
+confined to the canonical `output/` directory.
 
 ---
 
@@ -277,7 +291,7 @@ that reads only from that container.
 | `capability_engine.py` | `--rules` | Evaluates `rules/*.yaml` with AND/OR/NOT and N-of-M logic across instruction, block and function scope. |
 | `trace_correlator.py` | `--trace` | Correlates a CAPE/DRAKVUF sandbox trace against the static import set using a sliding call window, so multi-step behaviours (alloc → write → create thread) match as one capability. |
 | `index_report.py` | *(automatic)* | Indexes every run into `output/reports.db` for `--search` and the dashboard. |
-| `dashboard.py` | `--dashboard` | Standalone `http.server` UI + REST API. No Flask, no dependencies. |
+| `dashboard.py` | `--dashboard` | Standalone `http.server` UI + REST API. Loopback by default; `GHIDRA_DASHBOARD_HOST` opts into another bind address. |
 
 ### Format support
 
