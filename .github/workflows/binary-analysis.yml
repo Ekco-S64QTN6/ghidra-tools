@@ -37,3 +37,6 @@ jobs:
 
       - name: Test bounded firmware carving
         run: python3 tests/test_firmware_carver.py
+
+      - name: Test trace correlator normalization
+        run: python3 tests/test_trace_correlator.py
