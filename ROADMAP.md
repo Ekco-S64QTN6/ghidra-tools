@@ -44,6 +44,8 @@ These findings come from source inspection, not a successful execution of the pr
 - The default listener is loopback-only; remote binding is explicit and documented.
 - Security tests run in CI and fail the build on regression.
 
+**Incremental progress — 2026-10-29:** Report artifact routes now repeatedly URL-decode and canonicalize paths, reject traversal and symlink escapes, cap file/search responses, and return generic filesystem/database errors. Dashboard values are HTML-escaped before template insertion; exported report HTML receives a restrictive CSP sandbox. The server binds to loopback by default, with an explicit `GHIDRA_DASHBOARD_HOST` override; Docker Compose limits host publication to loopback. Dedicated HTTP/security regressions are wired into CI. This is incremental progress, not a full security sign-off: remote binds remain unauthenticated and require a trusted access boundary, and the complete suite/runtime threat review is still outstanding.
+
 ### 0.2 Make the Ghidra launcher honor configuration
 
 **Relevant files:** `run-headless.sh`, `ghidra-report.sh`, `Dockerfile`, `docker-compose.yml`.

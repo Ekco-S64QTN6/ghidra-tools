@@ -4,10 +4,13 @@ services:
   ghidra-report:
     build: .
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     volumes:
       - ./ingress:/workspace/ingress
       - ./output:/workspace/output
       - ./projects:/workspace/projects
+    environment:
+      # Bind inside the container; publish to host loopback only unless deliberately changed.
+      - GHIDRA_DASHBOARD_HOST=0.0.0.0
     command: ["--dashboard", "8080"]
     restart: unless-stopped
