@@ -4,6 +4,9 @@ Repository-specific guidance for contributors and coding agents.
 
 ## Runtime and compatibility
 
+- `VERSION` is the canonical app release version for the CLI banner, SARIF driver metadata, and local release archive naming. `tests/test_version_consistency.py` guards duplicate version references in docs, formulas, and CI.
+- Homebrew/AUR definitions are not release-ready while their SHA-256 fields say `SKIP`; never invent a digest. Only replace those placeholders after a real tag/release asset exists and the clean package install path has been tested.
+
 - The default container target is **Ghidra 12.2 + JDK 25**. Ghidra 12.2 requires at least JDK 25. The Docker build must verify the official release archive SHA-256 before extraction; do not update the version/date without refreshing the checksum from the upstream release and getting the container CI smoke test to pass.
 - `run-headless.sh` honors `GHIDRA_ROOT` and `JAVA_HOME`, uses `support/analyzeHeadless` for standard installs, and retains a derived-JDK workaround for Flatpak. Its Ghidra-root/version and Java-runtime messages are diagnostic; they do not certify compatibility of every Ghidra/Java pair.
 - Community console/firmware loaders are not bundled in the base Docker image. Claims about extension-backed loader behavior need an extension-equipped integration test. The container test covers PE analysis plus a synthetic SNES ROM through the raw 65816 fallback; this does not validate optional community loader extensions or all retail ROM variants.

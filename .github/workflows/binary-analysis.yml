@@ -41,11 +41,16 @@ jobs:
       - name: Test versioned JSON report schema
         run: python3 tests/test_report_schema.py
 
+      - name: Check canonical version consistency
+        run: python3 tests/test_version_consistency.py
+
       - name: Test release archive includes the JSON schema contract
         run: |
           ./scripts/package_release.sh
-          archive="dist/ghidra-report-v0.2.0-linux-x86_64.tar.gz"
+          version="$(cat VERSION)"
+          archive="dist/ghidra-report-v${version}-linux-x86_64.tar.gz"
           sha256sum -c "${archive}.sha256"
+          tar -tzf "$archive" | grep -Fxq "ghidra-report/VERSION"
           tar -tzf "$archive" | grep -Fxq "ghidra-report/schemas/report-v1.schema.json"
           tar -tzf "$archive" | grep -Fxq "ghidra-report/requirements-test.txt"
           tar -tzf "$archive" | grep -Fxq "ghidra-report/requirements-rules.txt"

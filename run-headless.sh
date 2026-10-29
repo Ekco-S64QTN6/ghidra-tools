@@ -7,6 +7,17 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -r "$SCRIPT_DIR/VERSION" ]]; then
+    GHIDRA_REPORT_VERSION="$(tr -d '\r\n' < "$SCRIPT_DIR/VERSION")"
+fi
+GHIDRA_REPORT_VERSION="${GHIDRA_REPORT_VERSION:-unknown}"
+if [[ "$GHIDRA_REPORT_VERSION" != "unknown" && ! "$GHIDRA_REPORT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "[ERROR] Invalid project version: $GHIDRA_REPORT_VERSION" >&2
+    exit 2
+fi
+export GHIDRA_REPORT_VERSION
+
 GHIDRA_ROOT="${GHIDRA_ROOT:-}"
 if [[ -z "$GHIDRA_ROOT" || ! -d "$GHIDRA_ROOT" ]]; then
     GHIDRA_ROOT=""

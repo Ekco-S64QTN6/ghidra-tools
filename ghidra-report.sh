@@ -23,6 +23,16 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_VERSION="${GHIDRA_REPORT_VERSION:-}"
+if [ -r "$SCRIPT_DIR/VERSION" ]; then
+    APP_VERSION="$(tr -d '\r\n' < "$SCRIPT_DIR/VERSION")"
+fi
+if [[ -n "$APP_VERSION" && ! "$APP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "[ERROR] Invalid project version: $APP_VERSION" >&2
+    exit 2
+fi
+APP_VERSION="${APP_VERSION:-unknown}"
+export GHIDRA_REPORT_VERSION="$APP_VERSION"
 INGRESS_DIR="$SCRIPT_DIR/ingress"
 OUTPUT_DIR="$SCRIPT_DIR/output"
 PROJECTS_DIR="$SCRIPT_DIR/projects"
@@ -80,7 +90,7 @@ print_banner() {
     echo "      ██║   ██║   ██║██║   ██║██║     ╚════██║"
     echo "      ██║   ╚██████╔╝╚██████╔╝███████╗███████║"
     echo "      ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝"
-    echo -e "${NC}${CYAN}  ░▒▓█ ghidra-report v0.2.0 · binary triage █▓▒░${NC}"
+    echo -e "${NC}${CYAN}  ░▒▓█ ghidra-report v${APP_VERSION} · binary triage █▓▒░${NC}"
     echo ""
 }
 

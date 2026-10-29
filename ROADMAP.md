@@ -11,7 +11,7 @@ The project already has a broad prototype: a Bash CLI, a Ghidra Java analysis pi
 The following issues should be addressed before describing the project as feature-complete or using its outputs as an automated containment signal:
 
 1. **Dashboard exposure:** `scripts/dashboard.py` binds to all interfaces, serves paths beneath `/output/` without a canonical-path containment check, and interpolates sample/report-derived strings into `innerHTML`. Taken together, these create serious file-disclosure and stored-XSS risks when the dashboard is reachable by untrusted clients or displays hostile samples.
-2. **Headless launch/runtime consistency:** the launcher now honors the detected `GHIDRA_ROOT` and prints Ghidra/Java diagnostics. The container is being aligned to Ghidra 12.2 + JDK 25 with a verified official archive checksum and real core-PE container smoke coverage; alternate host installs and optional community-loader compatibility remain separate verification paths.
+2. **Headless launch/runtime consistency:** the launcher now honors the detected `GHIDRA_ROOT` and prints Ghidra/Java diagnostics. The container is pinned to Ghidra 12.2 + JDK 25 with a verified official archive checksum and real PE/SNES container smoke coverage; alternate host installs and optional community-loader compatibility remain separate verification paths.
 3. **CI coverage is split by cost:** the fast job now runs explicit helper/security regressions, and a separate pinned-Ghidra container job analyzes a synthetic PE and validates the seven output formats plus JSON/SARIF/MISP envelopes. The broader `tests/run_tests.sh` suite is still not part of default CI; Code Scanning upload remains disabled until a tested upload path exists.
 4. **History/search remain limited but are identity-correct:** the index now uses JSON report path for idempotence and retains distinct same-basename runs through a compatible SQLite migration. Searches remain SQLite `LIKE` over selected metadata, hashes, APIs, IOCs, and indicators rather than FTS5; strings/symbols and broader searchable fields remain open.
 5. **Some feature claims still exceed the verified implementation:** supported ELF mappings are now selected from validated headers and passed to Ghidra; the capability engine remains aggregate-report matching rather than true instruction/basic-block/function-scope analysis; broader recursive firmware extraction/resource limits, trace correlation, and deobfuscation still need stronger fixtures and calibration.
@@ -52,7 +52,7 @@ These findings come from source inspection, not a successful execution of the pr
 
 - Remove the Flatpak-only paths hard-coded in `run-headless.sh`. Derive the launcher/JVM from `GHIDRA_ROOT` (and an explicit `JAVA_HOME` when provided), or invoke Ghidra's supported `support/analyzeHeadless` launcher where it works in the target environment.
 - Keep discovery and execution consistent: if the CLI finds `/opt/ghidra` or `/usr/share/ghidra`, the launcher must actually use that installation.
-- Pin one tested Ghidra build for the default CI/container path and publish the supported versions explicitly. The repository currently claims Ghidra 12.x but the Dockerfile downloads Ghidra 11.1.2. Upstream Ghidra has since published 12.2; choose a version deliberately and test it rather than relying on an unverified range.
+- Pin one tested Ghidra build for the default CI/container path and publish the supported versions explicitly. The container now pins Ghidra 12.2 and JDK 25 with the official archive checksum verified in CI. Continue to publish the tested version and qualify host versions separately.
 - Add clear dependency checks for Java, Ghidra, and required extensions, with actionable errors and an actual version printout.
 - Avoid piping the headless process through `tee | while` in a way that lets `set -e -o pipefail` bypass the intended loader-fallback/error handling. Capture its exit status explicitly before deciding whether to retry or emit reports.
 
@@ -258,6 +258,8 @@ These findings come from source inspection, not a successful execution of the pr
 
 ### 1.10 Repair reproducible packaging and versioning
 
+**Incremental progress — 2026-10-29:** Added root `VERSION` as the canonical CLI/application release version. The CLI banner, SARIF driver version, package archive name, and headless child environment now consume it; CI checks the statically versioned man page, README, Homebrew/AUR metadata, and package script for drift. Homebrew/AUR repository URLs and Java requirements now point to the real repository and JDK 25 target. **Release gate remains open:** this repository has no published GitHub Release/tag yet, so package source checksums remain explicit `SKIP` placeholders; clean install layouts also need correction and testing. Do not mark package distribution complete from the local tarball smoke alone.
+
 **Relevant files:** `Dockerfile`, `docker-compose.yml`, `scripts/package_release.sh`, `packaging/PKGBUILD`, `packaging/ghidra-report.rb`, `ghidra-report.1`, `SarifExporter.java`.
 
 - Fix the Homebrew/AUR repository URLs to the actual project origin.
@@ -285,7 +287,7 @@ Currentness assessment at the audit point:
 | `docs/PROCESSOR_PROFILES.md` | **Partially stale** | It hard-codes a Ghidra Flatpak extension directory, and its processor mapping example differs from the CLI mapping. The CLI logs detected ELF architecture but does not pass it as the processor selection. Make extension availability and detection-vs-selection explicit. |
 | `docs/SOAR_INTEGRATION.md` | **Payload example is stale** | The documented webhook example includes `risk_score`, `risk_level`, `sha256`, and `high_priority_findings`; the current CLI sends `text`, `binary`, `score`, and `level`. Verify integration endpoints and use a captured/tested payload before describing end-to-end ingestion as supported. |
 | `ghidra-report.1` | **Needs alignment** | Reconcile flags, supported behavior, release version, and maintainer metadata with tested CLI/package behavior. |
-| `Dockerfile` and package formulas | **Inconsistent** | The Docker Ghidra build, documented requirement, install paths, repository URLs, and checksum placeholders do not form one verified release story. |
+| `Dockerfile` and package formulas | **Container verified; package release pending** | Docker uses the pinned Ghidra 12.2/JDK 25 runtime and real PE/SNES smoke tests. Version references and repository URLs are now guarded by CI, but package source checksums remain placeholders until a real tag/release exists, and package install layouts still need clean-install tests. |
 
 - Keep a single concise support matrix with columns for detection, loader availability, analysis-tested status, and optional dependencies.
 - Document exactly which tests run by default, which require Ghidra, and which require community extensions.

@@ -50,8 +50,8 @@ public class SarifExporter {
             out.println("      \"tool\": {");
             out.println("        \"driver\": {");
             out.println("          \"name\": \"ghidra-report\",");
-            out.println("          \"version\": \"0.2.0\",");
-            out.println("          \"informationUri\": \"https://github.com/ghidra-tools\",");
+            out.println("          \"version\": \"" + escapeJson(System.getenv("GHIDRA_REPORT_VERSION") != null ? System.getenv("GHIDRA_REPORT_VERSION") : "unknown") + "\",");
+            out.println("          \"informationUri\": \"https://github.com/Ekco-S64QTN6/ghidra-tools\",");
             out.println("          \"rules\": [");
 
             int rIdx = 0;
@@ -63,7 +63,7 @@ public class SarifExporter {
                 if (entry.getKey().startsWith("T")) {
                     out.println("              \"helpUri\": \"https://attack.mitre.org/techniques/" + escapeJson(entry.getKey().replace(".", "/")) + "/\"");
                 } else {
-                    out.println("              \"helpUri\": \"https://github.com/ghidra-tools\"");
+                    out.println("              \"helpUri\": \"https://github.com/Ekco-S64QTN6/ghidra-tools\"");
                 }
                 out.print("            }");
                 if (rIdx < rulesMap.size() - 1) out.println(",");

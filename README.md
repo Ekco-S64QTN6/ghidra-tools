@@ -383,11 +383,14 @@ The image pins Ghidra 12.2 and Eclipse Temurin JDK 25, verifies the official rel
 ### Packages
 
 ```bash
-./scripts/package_release.sh          # dist/ghidra-report-v0.2.0-linux-x86_64.tar.gz + .sha256
+APP_VERSION="$(cat VERSION)"
+./scripts/package_release.sh          # dist/ghidra-report-v${APP_VERSION}-linux-x86_64.tar.gz + .sha256
 ```
 
 Homebrew formula and AUR `PKGBUILD` live in `packaging/`. A man page is at
 `ghidra-report.1`.
+
+**Release status:** `VERSION` is the canonical app version source. The Homebrew/AUR metadata is aligned to this repository and version, but release tags/assets have not been published and their source checksums remain explicit placeholders. Do not submit or install those package definitions as a release until a tagged release archive exists, its checksum is verified, and clean-install tests pass.
 
 ### CI
 
@@ -410,6 +413,7 @@ These are the deterministic checks run by the default GitHub Actions workflow. T
 python3 -m compileall -q scripts tests
 python3 tests/test_report_schema.py
 python3 tests/test_report_format.py
+python3 tests/test_version_consistency.py
 python3 tests/test_architecture_detector.py
 python3 tests/test_project_identity.py
 ./ghidra-report.sh --help >/dev/null

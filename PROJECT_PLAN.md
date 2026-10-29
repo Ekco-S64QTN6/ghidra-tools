@@ -315,10 +315,10 @@ This plan records intended milestones, not a claim that all planned storage beha
 | Component | Technology |
 |---|---|
 | CLI | Bash 4+ |
-| Ghidra scripts | Java 21 (GhidraScript API) |
+| Ghidra scripts | Java 25 for the pinned Ghidra 12.2 container (GhidraScript API); host installs use the JDK required by their installed release |
 | Decompiler integration | `ghidra.app.decompiler.DecompInterface` |
 | Report formats | Plain text, JSON, Markdown, HTML, SARIF v2.1.0, YARA, MISP JSON |
-| Binary analysis engine | Ghidra 12.x Headless Analyzer |
+| Binary analysis engine | Ghidra 12.2 Headless Analyzer in the pinned container; other host versions are not certified by that smoke test |
 | Console/firmware loaders | ghidra-snes, gba-ghidra-loader, N64LoaderWV, ghidra_psx_ldr, ghidra-firmware-utils |
 | Threat intel output | MISP event JSON, YARA rules, SARIF findings |
 | Dashboard | Python stdlib `http.server` (`scripts/dashboard.py`, no dependencies) |
