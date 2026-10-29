@@ -16,3 +16,4 @@ All notable changes to this project are documented here.
 - Require an actual YAML parser for capability rules, validate supported operators, primitive types, rule metadata, weights and unknown keys at load time, fail visibly on invalid rules, and add rule-loading/operator regression tests.
 - Correct README, man-page, and project-plan claims about history search: the current indexer uses SQLite `LIKE`, searches only metadata/APIs/IOCs/indicators, and overwrites a row when the filename repeats.
 - Make batch execution report per-item success/failure counts and return nonzero when any sample fails, while continuing the remaining items.
+- Validate file headers before format classification, select ELF processors from class/endianness/e_machine, log detection evidence, and include GBA/PSX/N64 ROMs in batch discovery. Use declared RISC-V language IDs and defer MIPS64 selection until ISA/ABI flags can be interpreted safely.

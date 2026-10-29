@@ -104,6 +104,8 @@ These findings come from source inspection, not a successful execution of the pr
 - Tests verify both detected format and the processor spec passed to Ghidra for x86, x86-64, ARM, AArch64, MIPS, RISC-V 32/64-bit, PowerPC, and unknown inputs.
 - The report records detection evidence and final Ghidra language ID so incorrect guesses are explainable.
 
+**Incremental progress — 2026-10-29:** Added `scripts/architecture_detector.py` to validate PE signatures/optional headers, ELF identity fields, N64 byte-order magics, PS-X EXE headers, GBA logo/checksum fields, and plausible checksum/reset-vector SNES headers before classifying those formats. Unknown `.bin`/`.rom` files now stay raw instead of being guessed as SNES. ELF processor selection uses ELF class, byte order, and `e_machine`, passes supported Ghidra language IDs through `-processor`, and logs the evidence used; unsupported combinations defer to Ghidra. RISC-V uses the declared `RISCV:LE:{32,64}:default` IDs; MIPS64 is intentionally not forced because Ghidra's current MIPS64 `default` definitions identify MIPS16e mode, so ELF ABI/ISA flags need interpretation before a safe selection can be made. Batch filtering now includes `.gba`, `.psx`, and N64 ROM suffixes. Synthetic architecture/header fixtures run in fast CI. The detector still reports format suggestion separately from the actual loader result, and the full integration suite must confirm language/loader IDs on real Ghidra imports.
+
 ### 1.2 Upgrade the YAML capability engine from prototype to a real rule system
 
 **Relevant files:** `scripts/capability_engine.py`, `rules/*.yaml`.

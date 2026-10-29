@@ -120,91 +120,14 @@ load_user_config() {
     fi
 }
 
-# Detect file format from extension and magic bytes
+# Format and processor detection are delegated to the stdlib parser. File extensions
+# are hints only: unknown .bin files must never be guessed to be SNES ROMs.
 detect_file_type() {
-    local file="$1"
-    local ext="${file##*.}"
-    ext="$(echo "$ext" | tr '[:upper:]' '[:lower:]')"
-
-    case "$ext" in
-        sfc|smc|fig)
-            echo "snes"
-            return
-            ;;
-        gba)
-            echo "gba"
-            return
-            ;;
-        z64|n64|v64)
-            echo "n64"
-            return
-            ;;
-        psx)
-            echo "psx"
-            return
-            ;;
-        exe|dll|sys)
-            echo "pe"
-            return
-            ;;
-        elf|so|o)
-            echo "elf"
-            return
-            ;;
-        rom|bin)
-            # Will check magic bytes below before falling back to snes
-            ;;
-    esac
-
-    # Magic byte checks
-    local magic_8
-    magic_8="$(head -c 8 "$file" 2>/dev/null || true)"
-    local magic_4="${magic_8:0:4}"
-
-    if [ "$magic_4" = $'\x7fELF' ]; then
-        echo "elf"
-        return
-    fi
-    if [ "${magic_8:0:2}" = "MZ" ]; then
-        echo "pe"
-        return
-    fi
-    if [ "$magic_8" = "PS-X EXE" ]; then
-        echo "psx"
-        return
-    fi
-
-    local hex4
-    hex4="$(head -c 4 "$file" 2>/dev/null | xxd -p 2>/dev/null || od -An -tx1 -N4 "$file" 2>/dev/null | tr -d ' \n' || true)"
-    if [ "$hex4" = "80371240" ] || [ "$hex4" = "37804012" ] || [ "$hex4" = "40123780" ]; then
-        echo "n64"
-        return
-    fi
-
-    if [ "$ext" = "sfc" ] || [ "$ext" = "smc" ] || [ "$ext" = "rom" ] || [ "$ext" = "bin" ]; then
-        echo "snes"
-        return
-    fi
-
-    echo "raw"
+    python3 "$SCRIPTS_DIR/architecture_detector.py" type "$1"
 }
 
-# Auto-detect ELF architecture from header e_machine
 detect_elf_arch() {
-    local file="$1"
-    python3 -c "
-import struct
-try:
-    with open('$file', 'rb') as f:
-        hdr = f.read(20)
-    if hdr[:4] == b'\x7fELF':
-        endian = '<' if hdr[5] == 1 else '>'
-        mach = struct.unpack(endian + 'H', hdr[18:20])[0]
-        arch_map = {3: 'x86:LE:32:default', 62: 'x86:LE:64:default', 40: 'ARM:LE:32:v8', 183: 'AARCH64:LE:64:v8A', 8: 'MIPS:BE:32:default', 243: 'RISCV:LE:64:RV64GC', 20: 'PowerPC:BE:32:default'}
-        print(arch_map.get(mach, f'e_machine {mach}'))
-except Exception:
-    pass
-"
+    python3 "$SCRIPTS_DIR/architecture_detector.py" arch "$1"
 }
 
 # Generate a project name from a binary path
@@ -226,6 +149,9 @@ import_and_analyze() {
     log_step "Importing: ${BOLD}$(basename "$binary_path")${NC} → project: ${BOLD}$project_name${NC}"
 
     local extra_args=()
+    local detection_evidence
+    detection_evidence="$(python3 "$SCRIPTS_DIR/architecture_detector.py" evidence "$binary_path")"
+    log_info "Detection evidence: $detection_evidence"
     case "$file_type" in
         snes)
             log_info "SNES ROM detected — attempting import with SnesRomLoader..."
@@ -251,7 +177,10 @@ import_and_analyze() {
             local elf_arch
             elf_arch="$(detect_elf_arch "$binary_path")"
             if [ -n "$elf_arch" ]; then
-                log_info "ELF Architecture auto-detected: ${BOLD}$elf_arch${NC}"
+                log_info "ELF processor selected: ${BOLD}$elf_arch${NC}"
+                extra_args+=(-processor "$elf_arch")
+            else
+                log_warn "ELF class/endianness/machine combination has no supported processor mapping; defer language selection to Ghidra."
             fi
             ;;
         *)
@@ -460,12 +389,14 @@ batch_process() {
         -o -iname "*.exe" -o -iname "*.dll" -o -iname "*.sys" \
         -o -iname "*.elf" -o -iname "*.so" -o -iname "*.o" \
         -o -iname "*.rom" -o -iname "*.fig" \
+        -o -iname "*.gba" -o -iname "*.psx" \
+        -o -iname "*.z64" -o -iname "*.n64" -o -iname "*.v64" \
     \) | sort)
 
     local total="${#files[@]}"
     if [ "$total" -eq 0 ]; then
         log_warn "No supported binaries found in $INGRESS_DIR"
-        log_info "Supported extensions: .bin .sfc .smc .exe .dll .sys .elf .so .o .rom .fig"
+        log_info "Supported extensions: .bin .sfc .smc .fig .gba .psx .z64 .n64 .v64 .exe .dll .sys .elf .so .o .rom"
         return 0
     fi
 

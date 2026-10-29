@@ -11,10 +11,10 @@ All community and bundled extensions reside in the Ghidra Flatpak Extensions dir
 
 | Platform / Architecture | Loader Class / Extension | Ghidra Language ID | Detection Signature | Key Capabilities |
 |---|---|---|---|---|
-| **Super Nintendo (SNES)** | `SnesRomLoader` (`ghidra-snes-master`) | `65816:LE:24:default` | `.sfc`, `.smc`, `.fig` | LoROM/HiROM mapping, WRAM blocks, MMIO registers ($2100-$2143), SPC700 audio protocol |
-| **Game Boy Advance (GBA)** | `GBALoader` (`gba-ghidra-loader`) | `ARM:LE:32:v4t` | `.gba` / Nintendo logo offset `0x04` | EWRAM, IWRAM, VRAM, ROM mapping, GBATEK hardware MMIO registers, BIOS SWI table |
-| **Nintendo 64 (N64)** | `N64LoaderWVLoader` (`N64LoaderWV`) | `MIPS:BE:64:64-32addr` | `.z64`, `.n64`, `.v64` / Magic `0x80371240` | Big-endian/byte-swapped ROMs, RDRAM, MIPS VR4300 + RSP coprocessor, MMIO registers |
-| **Sony PlayStation 1 (PS1)** | `PsxLoader` (`ghidra_psx_ldr`) | `MIPS:LE:32:default` | `.psx` / Magic `PS-X EXE` | MIPS R3000A, GTE (Geometry Engine) coprocessor, scratchpad, BIOS jump vectors |
+| **Super Nintendo (SNES)** | `SnesRomLoader` (`ghidra-snes-master`) or documented raw-65816 fallback | `65816:LE:24:snes` (fallback) | Plausible header title/mode, checksum complement, and reset vector at known header offsets; suffix is only a hint | LoROM/HiROM mapping, WRAM blocks, MMIO registers ($2100-$2143), SPC700 audio protocol |
+| **Game Boy Advance (GBA)** | `GBALoader` (`gba-ghidra-loader`) | `ARM:LE:32:v4t` | `.gba` plus Nintendo logo prefix and header complement checksum | EWRAM, IWRAM, VRAM, ROM mapping, GBATEK hardware MMIO registers, BIOS SWI table |
+| **Nintendo 64 (N64)** | `N64LoaderWVLoader` (`N64LoaderWV`) | `MIPS:BE:64:64-32addr` | Byte-order magics for `.z64`/`.v64`/`.n64` layouts; recognized by bytes, not suffix alone | Big-endian/byte-swapped ROMs, RDRAM, MIPS VR4300 + RSP coprocessor, MMIO registers |
+| **Sony PlayStation 1 (PS1)** | `PsxLoader` (`ghidra_psx_ldr`) | `MIPS:LE:32:default` | `PS-X EXE` magic plus minimum 0x800-byte header; suffix is only a hint | MIPS R3000A, GTE (Geometry Engine) coprocessor, scratchpad, BIOS jump vectors |
 | **Stripped Go Binaries** | `GolangAnalyzerExtension` | x86, x64, ARM, MIPS | `.gopclntab` section / Go build ID | Recovers function symbols, package hierarchies, source paths, and Go type descriptors |
 | **UEFI / BIOS Firmware** | `ghidra-firmware-utils` | x86, x64, ARM | Firmware Volume GUID / FMAP | Parses UEFI FV, Firmware File System (FFS), Intel Flash Descriptor (IFD) |
 | **Bare-Metal ARM Cortex-M** | `svd_injector.py` / `ghidra-svd` | `ARM:LE:32:Cortex` | `.svd` (CMSIS-SVD XML) | Vendor register bitfields, peripheral base addresses, interrupt vector tables |
@@ -23,27 +23,27 @@ All community and bundled extensions reside in the Ghidra Flatpak Extensions dir
 
 ---
 
-## 2. ELF `e_machine` Auto-Detection Mapping
+## 2. ELF Architecture Detection and Processor Selection
 
-In `ghidra-report.sh`, ELF headers are inspected at offset `18-19` (`0x12`) to automatically configure the Ghidra processor language without requiring manual command-line flags:
+`scripts/architecture_detector.py` validates the ELF identification header before reading `e_machine`. The language mapping also uses ELF class and `EI_DATA` byte order; unknown or incompatible combinations do not receive a guessed processor. When a known mapping exists, `ghidra-report.sh` passes that language ID using Ghidra's `-processor` import option. The report writer independently records the language ID of the program Ghidra actually opened.
 
-```bash
-case "$machine_id" in
-    0x0003) processor="x86:LE:32:default" ;;       # EM_386 (Intel 80386+)
-    0x003E) processor="x86:LE:64:default" ;;       # EM_X86_64 (AMD64 / x86-64)
-    0x0028) processor="ARM:LE:32:v8T" ;;           # EM_ARM (ARM Thumb / Thumb-2)
-    0x00B7) processor="AARCH64:LE:64:v8A" ;;       # EM_AARCH64 (64-bit ARM)
-    0x0008) processor="MIPS:BE:32:default" ;;      # EM_MIPS (MIPS 32-bit Big Endian)
-    0x00F3) processor="RISCV:LE:32:RV32GC" ;;      # EM_RISCV (RISC-V 32-bit compressed)
-    0x0014) processor="PowerPC:BE:32:default" ;;   # EM_PPC (PowerPC 32-bit Big Endian)
-esac
-```
+| `e_machine` | ELF class / byte order | Selected Ghidra language |
+|---|---|---|
+| `EM_386` | ELF32 little-endian | `x86:LE:32:default` |
+| `EM_X86_64` | ELF64 little-endian | `x86:LE:64:default` |
+| `EM_ARM` | ELF32 little- or big-endian | `ARM:LE:32:v8` / `ARM:BE:32:v8` |
+| `EM_AARCH64` | ELF64 little- or big-endian | `AARCH64:LE:64:v8A` / `AARCH64:BE:64:v8A` |
+| `EM_MIPS` | ELF32, either byte order | `MIPS:LE:32:default` / `MIPS:BE:32:default`; ELF64 is deliberately deferred until ABI/ISA flags can disambiguate the decoder |
+| `EM_RISCV` | ELF32/ELF64 little-endian | `RISCV:LE:32:default` / `RISCV:LE:64:default` |
+| `EM_PPC` | ELF32, either byte order | `PowerPC:{LE,BE}:32:default` |
+| `EM_PPC64` | ELF64, either byte order | `PowerPC:{LE,BE}:64:default` |
 
+Check a sample before import with `./ghidra-report.sh --detect-type sample.bin`; use `python3 scripts/architecture_detector.py json sample.elf` to inspect the evidence and optional processor selection.
 ---
 
 ## 3. Fast Format & Architecture Inspection (`--detect-type`)
 
-To verify how `ghidra-report` will classify a binary before triggering a headless build:
+To verify how `ghidra-report` will classify a binary before triggering a headless build. The detector validates structural fields and leaves invalid or truncated headers as `raw` instead of accepting the suffix alone:
 
 ```bash
 # Check single binary format
