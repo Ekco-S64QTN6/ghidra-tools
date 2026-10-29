@@ -12,3 +12,4 @@ All notable changes to this project are documented here.
 - Keep `--help` and offline CLI utilities available without Ghidra by checking Ghidra prerequisites only when binary analysis starts.
 - Reject truncated U-Boot uImage payloads whose declared length exceeds the available input and add synthetic bounds regression tests.
 - Normalize top-level array and CAPE-style dynamic traces, preserve event metadata, compare API names case-insensitively, and prevent cross-process attack-chain matches.
+- Index current report timestamps, IOCs, and indicator ATT&CK IDs correctly while preserving compatibility with older field names.
