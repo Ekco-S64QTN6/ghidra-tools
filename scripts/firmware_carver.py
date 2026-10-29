@@ -19,11 +19,17 @@ import json
 import time
 
 def parse_uimage(data, offset):
-    if len(data) - offset < 64:
+    if offset < 0 or len(data) - offset < 64:
         return None
     hdr = data[offset:offset+64]
     magic, hcrc, tstamp, dsize, load, ep, dcrc, os_type, arch, img_type, comp = struct.unpack(">IIIIIIIBBBB", hdr[:32])
     if magic != 0x27051956:
+        return None
+
+    # The uImage data size is untrusted. Reject a container whose declared
+    # payload does not fit entirely after the 64-byte header.
+    available_payload = len(data) - offset - 64
+    if dsize > available_payload:
         return None
 
     name_bytes = hdr[32:64]
@@ -184,6 +190,16 @@ def scan_file(filepath):
                 findings.append(res)
                 i += max(64, res["total_size"])
                 continue
+            if n - i >= 64:
+                declared_size = struct.unpack_from(">I", data, i + 12)[0]
+                available_payload = n - i - 64
+                if declared_size > available_payload:
+                    print(
+                        "[WARN] Ignoring truncated uImage at 0x%X: "
+                        "header declares %d payload bytes, only %d remain."
+                        % (i, declared_size, available_payload),
+                        file=sys.stderr,
+                    )
 
         # 2. SquashFS
         if chunk in (b"sqsh", b"hsqs", b"shsq", b"qshs"):
