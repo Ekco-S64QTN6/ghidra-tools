@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installed package launcher template. Packaging replaces @APP_ROOT@ at build time.
+# Installed package launcher template; packaging supplies the application root at build time.
 set -euo pipefail
 
 APP_ROOT="@APP_ROOT@"
