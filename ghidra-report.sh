@@ -283,7 +283,8 @@ generate_report() {
     local binary_name="$2"
     local output_key="${3:-$binary_name}"
     # Keep each invocation's artifacts separate, even if repeated runs start in the same second.
-    timestamp="$(date +%Y%m%d_%H%M%S)_$$_${RANDOM}"
+    local timestamp
+    timestamp="$(date +%Y%m%d_%H%M%S)_$_${RANDOM}"
     local file_output_dir="$OUTPUT_DIR/$output_key"
     mkdir -p "$file_output_dir"
     local report_base="$file_output_dir/${binary_name}_report_${timestamp}"
