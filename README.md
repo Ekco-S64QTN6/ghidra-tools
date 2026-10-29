@@ -186,6 +186,8 @@ against a malware rubric.
 ./ghidra-report.sh --purge-projects          Delete cached .gpr / .rep databases
 ```
 
+File types are validated against header signatures and structural fields before loader dispatch; an unknown `.bin`/`.rom` stays a raw binary rather than being guessed to be SNES. Supported ELF language IDs are selected from class, byte order, and `e_machine`. If the header does not justify a safe language choice (including ambiguous MIPS64 ISA/ABI variants), `--detect-type` reports the format while import defers processor selection to Ghidra.
+
 ### Options
 
 | Flag | Effect |
