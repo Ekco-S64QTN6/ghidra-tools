@@ -41,6 +41,9 @@ jobs:
       - name: Test versioned JSON report schema
         run: python3 tests/test_report_schema.py
 
+      - name: Check canonical version consistency
+        run: python3 tests/test_version_consistency.py
+
       - name: Test release archive includes the JSON schema contract
         run: |
           ./scripts/package_release.sh
