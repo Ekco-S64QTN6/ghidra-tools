@@ -151,6 +151,8 @@ These findings come from source inspection, not a successful execution of the pr
 - Corrupt/oversized inputs stop within resource limits and never write outside the chosen output directory.
 - Every advertised format has a known-positive fixture and a malformed-input regression case.
 
+**Incremental progress — 2026-10-29:** The uImage parser now rejects negative offsets and headers whose declared payload size exceeds the bytes remaining in the input, and the scanner emits a diagnostic instead of reporting a truncated container. A synthetic standard-library test covers valid payloads, truncated payloads, invalid offsets, and ensures truncated headers produce no carve output; this test runs in the fast CI lane. Header CRC validation, recursion, resource budgets, and broader per-format negative fixtures remain open.
+
 ### 1.5 Correct dynamic trace correlation
 
 **Relevant files:** `scripts/trace_correlator.py`, `--trace`, `docs/SOAR_INTEGRATION.md`.

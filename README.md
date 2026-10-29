@@ -386,6 +386,7 @@ python3 -m compileall -q scripts tests
 ./ghidra-report.sh --help >/dev/null
 bash tests/test_run_headless.sh
 python3 tests/test_dashboard_security.py
+python3 tests/test_firmware_carver.py
 ```
 
 The launcher regression test mocks the Ghidra commands and checks standard and
