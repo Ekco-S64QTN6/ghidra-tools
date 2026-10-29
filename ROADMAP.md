@@ -84,6 +84,8 @@ These findings come from source inspection, not a successful execution of the pr
 - A failing test, failed headless analysis, missing SARIF file, or schema error fails the job.
 - The workflow report accurately states which test groups ran and which optional groups were skipped.
 
+**Incremental progress — 2026-10-29:** The fast CI lane now runs Python compilation, CLI help, the mocked portable-launcher regressions, and the dashboard HTTP/security regressions as explicit failing checks. Removed the `firmware_carver.py ... || true` command because it did not validate behavior and could not fail CI. Removed the manual SARIF upload-only job because it never generated the referenced `output/dsetup.dll/report_latest.sarif` artifact and hid upload failures. The full Ghidra-backed suite, extension-independent fixtures, Java/schema validation, Docker smoke analysis, and real SARIF generation/upload remain open; this does not close P0.3.
+
 ---
 
 ## P1 — Correctness and evidence quality
