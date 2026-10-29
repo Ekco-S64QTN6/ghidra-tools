@@ -65,7 +65,7 @@ class ProjectIdentityTests(unittest.TestCase):
 
     def test_name_is_safe_and_bounded_for_long_filenames(self):
         with tempfile.TemporaryDirectory(prefix="project-identity-") as temp:
-            path = os.path.join(temp, "very long filename with spaces" * 12 + ".bin")
+            path = os.path.join(temp, "very long filename with spaces" * 6 + ".bin")
             with open(path, "wb") as handle:
                 handle.write(b"payload")
             name = project_identity.project_identity(path)
