@@ -204,7 +204,12 @@ def inspect_file(path):
             return {"format": "raw", "processor": None, "evidence": elf["evidence"] if elf else "truncated ELF header; raw import"}
 
         if magic[:4] in N64_MAGICS:
-            return {"format": "n64", "processor": None, "evidence": N64_MAGICS[magic[:4]]}
+            if size >= 0x40:
+                n64_header = _read_at(path, 0, 0x40)
+                title = n64_header[0x20:0x34]
+                if sum(32 <= byte <= 126 for byte in title) >= 4:
+                    return {"format": "n64", "processor": None, "evidence": N64_MAGICS[magic[:4]] + "; title/header fields are present"}
+            return {"format": "raw", "processor": None, "evidence": "N64 magic present but the header/title fields are truncated or invalid"}
 
         if magic[:8] == b"PS-X EXE":
             if size >= 0x800:
