@@ -535,8 +535,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
             conn.close()
             self.send_json(files)
-        except Exception as e:
-            self.send_json({"error": str(e)}, status=500)
+        except Exception:
+            self.send_json({"error": "Failed to search the report index."}, status=500)
 
     def serve_file(self, file_path):
         ctype, _ = mimetypes.guess_type(file_path)
