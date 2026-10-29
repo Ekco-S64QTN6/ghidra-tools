@@ -134,14 +134,21 @@ detect_elf_arch() {
 # Generate a project name from a binary path
 project_name_for() {
     local file="$1"
-    python3 "$SCRIPTS_DIR/project_identity.py" "$file" "${RUN_FINDCRYPT:-false}" "${GHIDRA_ROOT:-}"
+    python3 "$SCRIPTS_DIR/project_identity.py" project "$file" "${RUN_FINDCRYPT:-false}" "${GHIDRA_ROOT:-}"
+}
+
+output_key_for() {
+    local file="$1"
+    python3 "$SCRIPTS_DIR/project_identity.py" output "$file"
 }
 
 # Import binary into a Ghidra project and run analysis
 import_and_analyze() {
     local binary_path="$1"
-    local project_name
-    project_name="$(project_name_for "$binary_path")"
+    local project_name="${2:-}"
+    if [ -z "$project_name" ]; then
+        project_name="$(project_name_for "$binary_path")" || return $?
+    fi
     local file_type
     file_type="$(detect_file_type "$binary_path")"
 
@@ -274,9 +281,10 @@ import_and_analyze() {
 generate_report() {
     local project_name="$1"
     local binary_name="$2"
+    local output_key="${3:-$binary_name}"
     local timestamp
     timestamp="$(date +%Y%m%d_%H%M%S)"
-    local file_output_dir="$OUTPUT_DIR/$binary_name"
+    local file_output_dir="$OUTPUT_DIR/$output_key"
     mkdir -p "$file_output_dir"
     local report_base="$file_output_dir/${binary_name}_report_${timestamp}"
 
@@ -375,8 +383,611 @@ process_binary() {
 
     local binary_name
     binary_name="$(basename "$binary_path")"
-    local project_name
-    project_name="$(project_name_for "$binary_path")"
+    local identity_line
+    identity_line="$(python3 "$SCRIPTS_DIR/project_identity.py" identities "$binary_path" "${RUN_FINDCRYPT:-false}" "${GHIDRA_ROOT:-}")" || return $?
+    local project_name output_key
+    local IFS=
+        log_info "Project already exists: $project_name"
+        log_info "Use --reimport to force re-import with fresh analysis."
+    else
+        if ! import_and_analyze "$binary_path" "$project_name"; then
+            log_error "Skipping report generation due to import failure."
+            return 1
+        fi
+    fi
+
+    generate_report "$project_name" "$binary_name" "$output_key"
+}
+
+# Batch process all supported files in ingress/. Any failed item makes the overall command fail.
+batch_process() {
+    log_step "Scanning ingress directory for binaries..."
+    local files=()
+    while IFS= read -r f; do
+        files+=("$f")
+    done < <(find "$INGRESS_DIR" -type f \( \
+        -iname "*.bin" -o -iname "*.sfc" -o -iname "*.smc" \
+        -o -iname "*.exe" -o -iname "*.dll" -o -iname "*.sys" \
+        -o -iname "*.elf" -o -iname "*.so" -o -iname "*.o" \
+        -o -iname "*.rom" -o -iname "*.fig" \
+        -o -iname "*.gba" -o -iname "*.psx" \
+        -o -iname "*.z64" -o -iname "*.n64" -o -iname "*.v64" \
+    \) | sort)
+
+    local total="${#files[@]}"
+    if [ "$total" -eq 0 ]; then
+        log_warn "No supported binaries found in $INGRESS_DIR"
+        log_info "Supported extensions: .bin .sfc .smc .fig .gba .psx .z64 .n64 .v64 .exe .dll .sys .elf .so .o .rom"
+        return 0
+    fi
+
+    local jobs="${PARALLEL_JOBS:-1}"
+    if [[ ! "$jobs" =~ ^[1-9][0-9]*$ ]]; then
+        log_error "Parallel worker count must be a positive integer, got: $jobs"
+        return 2
+    fi
+    if [ "$jobs" -gt "$total" ]; then
+        jobs="$total"
+    fi
+
+    if [ "$jobs" -gt 1 ]; then
+        log_step "Dispatching $total file(s) across ${BOLD}$jobs parallel workers${NC}..."
+    else
+        log_step "Processing $total file(s) serially..."
+    fi
+
+    if run_batch_workers "$jobs" process_binary "${files[@]}"; then
+        echo ""
+        log_success "Batch processing complete: ${BATCH_SUCCESS_COUNT}/${BATCH_TOTAL_COUNT} succeeded, 0 failed."
+        return 0
+    else
+        local batch_status=$?
+        echo ""
+        log_error "Batch processing finished: ${BATCH_SUCCESS_COUNT}/${BATCH_TOTAL_COUNT} succeeded, ${BATCH_FAILURE_COUNT} failed."
+        return "$batch_status"
+    fi
+}
+
+# Compare two reports (JSON format) with standardized semantic findings lifecycle
+diff_reports() {
+    local r1="$1"
+    local r2="$2"
+
+    if [ -d "$OUTPUT_DIR/$r1" ] && [ -f "$OUTPUT_DIR/$r1/report_latest.json" ]; then
+        r1="$OUTPUT_DIR/$r1/report_latest.json"
+    elif [ -d "$r1" ] && [ -f "$r1/report_latest.json" ]; then
+        r1="$r1/report_latest.json"
+    fi
+
+    if [ -d "$OUTPUT_DIR/$r2" ] && [ -f "$OUTPUT_DIR/$r2/report_latest.json" ]; then
+        r2="$OUTPUT_DIR/$r2/report_latest.json"
+    elif [ -d "$r2" ] && [ -f "$r2/report_latest.json" ]; then
+        r2="$r2/report_latest.json"
+    fi
+
+    if [ ! -f "$r1" ] || [ ! -f "$r2" ]; then
+        log_error "Both report JSON files must exist for comparison."
+        log_info "Usage: $0 --diff <report1.json|binary1> <report2.json|binary2>"
+        exit 1
+    fi
+
+    log_step "Comparing reports:"
+    echo -e "    Target A: ${BOLD}$r1${NC}"
+    echo -e "    Target B: ${BOLD}$r2${NC}"
+    echo ""
+
+    python3 - "$r1" "$r2" <<'PYDIFF'
+import json, sys
+
+r1 = sys.argv[1]
+r2 = sys.argv[2]
+
+try:
+    with open(r1) as f1, open(r2) as f2:
+        d1 = json.load(f1)
+        d2 = json.load(f2)
+except Exception as e:
+    print(f"Error reading JSON reports: {e}")
+    sys.exit(1)
+
+print('=' * 80)
+print('  REPORT COMPARISON')
+print('=' * 80)
+print(f'  Target A: {d1.get("file")} ({d1.get("format_label")})')
+print(f'  Target B: {d2.get("file")} ({d2.get("format_label")})')
+print()
+
+# Threat Score Diff
+s1 = d1.get('threat_summary', {}).get('risk_score', 0)
+s2 = d2.get('threat_summary', {}).get('risk_score', 0)
+l1 = d1.get('threat_summary', {}).get('risk_level', 'UNKNOWN')
+l2 = d2.get('threat_summary', {}).get('risk_level', 'UNKNOWN')
+diff_s = s2 - s1
+sign = '+' if diff_s > 0 else ''
+print(f'  Threat Score: {s1} ({l1}) -> {s2} ({l2}) [{sign}{diff_s}]')
+
+# Hashes
+h1 = d1.get('hashes', {}).get('sha256', '')
+h2 = d2.get('hashes', {}).get('sha256', '')
+print(f'  SHA256 Match: {"IDENTICAL" if h1 == h2 else "DIFFERENT"}')
+print()
+
+# Function counts
+f1 = d1.get('analysis_stats', {}).get('function_count', 0)
+f2 = d2.get('analysis_stats', {}).get('function_count', 0)
+print(f'  Function Count: {f1} -> {f2} ({f2 - f1:+d})')
+
+# Memory blocks
+b1 = {b['name']: b for b in d1.get('memory_blocks', [])}
+b2 = {b['name']: b for b in d2.get('memory_blocks', [])}
+all_blocks = sorted(set(b1.keys()).union(set(b2.keys())))
+print('\n  Section / Memory Block Diffs:')
+print(f'  {"Block":<18} {"A Size":<10} {"B Size":<10} {"A Entropy":<10} {"B Entropy":<10} {"Status"}')
+print('  ' + '-' * 70)
+for bname in all_blocks:
+    if bname in b1 and bname in b2:
+        sz1 = b1[bname].get('size', 0)
+        sz2 = b2[bname].get('size', 0)
+        e1 = b1[bname].get('entropy', 0.0)
+        e2 = b2[bname].get('entropy', 0.0)
+        chg = '[UPDATED]' if (sz1 != sz2 or abs(e1 - e2) > 0.05) else '[UNCHANGED]'
+        print(f'  {bname:<18} {sz1:<10} {sz2:<10} {e1:<10.2f} {e2:<10.2f} {chg}')
+    elif bname in b2:
+        print(f'  {bname:<18} {"-":<10} {b2[bname].get("size",0):<10} {"-":<10} {b2[bname].get("entropy",0.0):<10.2f} [NEW]')
+    else:
+        print(f'  {bname:<18} {b1[bname].get("size",0):<10} {"-":<10} {b1[bname].get("entropy",0.0):<10.2f} {"-":<10} [ABSENT]')
+
+# Suspicious APIs (Semantic Lifecycle)
+a1 = {f"{a.get('library')}!{a.get('function')}" for a in d1.get('suspicious_apis', [])}
+a2 = {f"{a.get('library')}!{a.get('function')}" for a in d2.get('suspicious_apis', [])}
+added_apis = a2 - a1
+removed_apis = a1 - a2
+unchanged_apis = a1.intersection(a2)
+
+print('\n  Suspicious APIs Lifecycle:')
+for api in sorted(added_apis):
+    print(f'    [NEW]      + {api}')
+for api in sorted(removed_apis):
+    print(f'    [ABSENT]   - {api}')
+for api in sorted(unchanged_apis):
+    print(f'    [UNCHANGED]  {api}')
+if not (added_apis or removed_apis or unchanged_apis):
+    print('    (none)')
+
+print(f'\n  Lifecycle Summary: {len(added_apis)} new, {len(removed_apis)} absent, {len(unchanged_apis)} unchanged APIs.')
+print('=' * 80)
+PYDIFF
+}
+
+# Start the interactive web dashboard
+serve_dashboard() {
+    local port="${1:-8080}"
+    local bind_host="${GHIDRA_DASHBOARD_HOST:-127.0.0.1}"
+    log_step "Starting ghidra-report dashboard (bind ${bind_host}:${port})..."
+    log_info "Local browser URL: ${BOLD}http://localhost:${port}/${NC}"
+    if [ "$bind_host" != "127.0.0.1" ] && [ "$bind_host" != "::1" ]; then
+        log_warn "Dashboard has no authentication; expose non-loopback binds only on a trusted, protected network."
+    fi
+    log_info "Press Ctrl+C to stop."
+    echo ""
+    if [ -f "$SCRIPTS_DIR/dashboard.py" ]; then
+        python3 "$SCRIPTS_DIR/dashboard.py" "$port"
+    else
+        python3 -m http.server "$port" --bind "$bind_host" --directory "$SCRIPT_DIR"
+    fi
+}
+
+# Purge Ghidra project files to reclaim disk space
+purge_projects() {
+    log_step "Cleaning temporary Ghidra projects in $PROJECTS_DIR..."
+    if ls "$PROJECTS_DIR"/*.gpr 1>/dev/null 2>&1 || ls -d "$PROJECTS_DIR"/*.rep 1>/dev/null 2>&1; then
+        rm -rf "$PROJECTS_DIR"/*.gpr "$PROJECTS_DIR"/*.rep
+        log_success "Purged all temporary Ghidra projects."
+    else
+        log_info "No projects to purge."
+    fi
+}
+
+# List existing Ghidra projects
+list_projects() {
+    log_info "Ghidra projects in $PROJECTS_DIR:"
+    echo ""
+    if ls "$PROJECTS_DIR"/*.gpr 1>/dev/null 2>&1; then
+        for gpr in "$PROJECTS_DIR"/*.gpr; do
+            local name
+            name="$(basename "$gpr" .gpr)"
+            local rep_size="unknown"
+            if [ -d "$PROJECTS_DIR/${name}.rep" ]; then
+                rep_size="$(du -sh "$PROJECTS_DIR/${name}.rep" | cut -f1)"
+            fi
+            echo -e "    ${GREEN}●${NC} $name  ${DIM}($rep_size)${NC}"
+        done
+    else
+        echo -e "    ${DIM}(none)${NC}"
+    fi
+    echo ""
+}
+
+# Watch ingress directory and automatically analyze new files
+watch_ingress() {
+    log_step "Starting zero-touch ingress watcher on: ${BOLD}$INGRESS_DIR${NC}"
+    log_info "Drop binaries into $INGRESS_DIR to trigger automatic analysis."
+    log_info "Press Ctrl+C to exit."
+    echo ""
+
+    if command -v inotifywait >/dev/null 2>&1; then
+        log_info "Using inotifywait event engine..."
+        inotifywait -m -e close_write,moved_to --format "%w%f" "$INGRESS_DIR" | while read -r new_file; do
+            if [ -f "$new_file" ]; then
+                echo ""
+                log_step "New file detected: ${BOLD}$(basename "$new_file")${NC}"
+                process_binary "$new_file" "false"
+            fi
+        done
+    else
+        log_warn "inotifywait not installed. Using portable polling engine (2s interval)..."
+        local processed_file
+        processed_file="$(mktemp)"
+        find "$INGRESS_DIR" -maxdepth 2 -type f > "$processed_file"
+
+        trap "rm -f \"$processed_file\"; exit 0" INT TERM
+
+        while true; do
+            while IFS= read -r f; do
+                if ! grep -qF "$f" "$processed_file" 2>/dev/null; then
+                    echo ""
+                    log_step "New file detected: ${BOLD}$(basename "$f")${NC}"
+                    echo "$f" >> "$processed_file"
+                    process_binary "$f" "false"
+                fi
+            done < <(find "$INGRESS_DIR" -maxdepth 2 -type f 2>/dev/null)
+            sleep 2
+        done
+        rm -f "$processed_file"
+    fi
+}
+
+# Capability Rule Engine
+evaluate_capabilities() {
+    local target="$1"
+    local rep="$target"
+    if [ -z "$rep" ]; then
+        rep="$(find "$OUTPUT_DIR" -name "report_latest.json" | head -n 1)"
+        if [ -z "$rep" ]; then
+            log_error "Usage: $0 --rules <report.json|binary_name>"
+            exit 1
+        fi
+    fi
+    if [ ! -f "$rep" ] && [ -f "$OUTPUT_DIR/$rep/report_latest.json" ]; then
+        rep="$OUTPUT_DIR/$rep/report_latest.json"
+    fi
+    if [ ! -f "$rep" ]; then
+        log_error "Report file not found: $rep"
+        exit 1
+    fi
+    python3 "$SCRIPTS_DIR/capability_engine.py" evaluate "$rep" "$SCRIPT_DIR/rules"
+}
+
+# Dynamic Trace Correlator
+correlate_trace() {
+    local trace="$1"
+    local static_target="${2:-}"
+    if [ -z "$trace" ]; then
+        log_error "Usage: $0 --trace <trace.json> [static_report.json]"
+        exit 1
+    fi
+    local rep="$static_target"
+    if [ -z "$rep" ]; then
+        rep="$(find "$OUTPUT_DIR" -name "report_latest.json" | head -n 1)"
+    fi
+    if [ ! -f "$rep" ] && [ -f "$OUTPUT_DIR/$rep/report_latest.json" ]; then
+        rep="$OUTPUT_DIR/$rep/report_latest.json"
+    fi
+    if [ ! -f "$rep" ]; then
+        log_error "Static report file not found: $rep"
+        exit 1
+    fi
+    python3 "$SCRIPTS_DIR/trace_correlator.py" correlate "$rep" "$trace"
+}
+
+# CMSIS-SVD Inspector
+inspect_svd() {
+    local svd="$1"
+    if [ -z "$svd" ] || [ ! -f "$svd" ]; then
+        log_error "Usage: $0 --svd <file.svd>"
+        exit 1
+    fi
+    python3 "$SCRIPTS_DIR/svd_injector.py" inspect "$svd"
+}
+
+# Search historical analysis database
+search_reports() {
+    local term="$1"
+    if [ -z "$term" ]; then
+        log_error "Please provide a search term: $0 --search <term>"
+        exit 1
+    fi
+    python3 "$SCRIPTS_DIR/index_report.py" search "$term"
+}
+
+# Show help
+show_help() {
+    print_banner
+    echo "  USAGE:"
+    echo "    ./ghidra-report.sh <binary-file> [options]           Analyze a single file"
+    echo "    ./ghidra-report.sh --batch [options]                 Analyze all files in ingress/"
+    echo "    ./ghidra-report.sh --watch [options]                 Continuous ingress directory watcher"
+    echo "    ./ghidra-report.sh --reimport <binary-file>          Re-import with fresh analysis"
+    echo "    ./ghidra-report.sh --diff <rep1.json> <rep2.json>    Compare two reports"
+    echo "    ./ghidra-report.sh --carve <binary-file> [out_dir]   Scan & carve embedded firmware containers"
+    echo "    ./ghidra-report.sh --rules [rep.json|binary]         Evaluate YAML capability rules (CAPA style)"
+    echo "    ./ghidra-report.sh --trace <trace.json> [rep.json]   Correlate dynamic sandbox execution log"
+    echo "    ./ghidra-report.sh --svd <file.svd>                  Inspect and inject CMSIS-SVD peripherals"
+    echo "    ./ghidra-report.sh --search <term>                   Search historical reports database"
+    echo "    ./ghidra-report.sh --dashboard [port]                Launch interactive web dashboard"
+    echo "    ./ghidra-report.sh --list-projects                   Show existing Ghidra projects"
+    echo "    ./ghidra-report.sh --purge-projects                  Clean Ghidra temporary project cache"
+    echo "    ./ghidra-report.sh --help                            Show this help"
+    echo ""
+    echo "  OPTIONS:"
+    echo "    --format <txt|json|md|html|sarif|yar|misp|all>       Output formats (default: all)"
+    echo "    --parallel, -j [N]                                   Run batch analysis with N concurrent workers"
+    echo "    --findcrypt                                          Scan for 100+ cryptographic constants (AES, ChaCha, MD5, SHA)"
+    echo "    --webhook <url>                                      Send triage alert to Slack/Discord/Webhook"
+    echo "    --full-disasm                                        Disassemble all functions"
+    echo ""
+    echo "  DIRECTORIES:"
+    echo "    ingress/   Drop binary files here for analysis"
+    echo "    output/    Reports are written here (.txt, .json, .md, .html, .sarif, .yar, .misp.json)"
+    echo "    scripts/   Ghidra analysis scripts (Java)"
+    echo ""
+    echo "  SUPPORTED FORMATS:"
+    echo "    PE Executables  .exe .dll .sys"
+    echo "    ELF Binaries    .elf .so .o"
+    echo "    SNES ROMs       .sfc .smc .bin .rom .fig"
+    echo "    Raw Binaries    .bin"
+    echo ""
+}
+
+# ── Argument Parsing ──
+
+setup_dirs
+load_user_config
+
+ACTION=""
+TARGET_FILE=""
+TARGET_DIFF1=""
+TARGET_DIFF2=""
+SEARCH_TERM=""
+TARGET_TRACE=""
+TARGET_SVD="" 
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --help|-h)
+            show_help
+            exit 0
+            ;;
+        --batch|-b)
+            ACTION="batch"
+            shift
+            ;;
+        --watch|-w)
+            ACTION="watch"
+            shift
+            ;;
+        --dashboard|--serve|-s)
+            ACTION="serve"
+            shift
+            if [[ $# -gt 0 && "$1" =~ ^[0-9]+$ ]]; then
+                SERVE_PORT="$1"
+                shift
+            fi
+            ;;
+        --search|-q)
+            ACTION="search"
+            shift
+            if [[ $# -gt 0 && ! "$1" =~ ^-- ]]; then
+                SEARCH_TERM="$1"
+                shift
+            fi
+            ;;
+        --list-projects|-l)
+            ACTION="list-projects"
+            shift
+            ;;
+        --rules|--capabilities)
+            ACTION="rules"
+            shift
+            if [[ $# -gt 0 && ! "$1" =~ ^-- ]]; then
+                TARGET_FILE="$1"
+                shift
+            fi
+            ;;
+        --trace)
+            ACTION="trace"
+            shift
+            if [[ $# -gt 0 && ! "$1" =~ ^-- ]]; then
+                TARGET_TRACE="$1"
+                shift
+            fi
+            if [[ $# -gt 0 && ! "$1" =~ ^-- ]]; then
+                TARGET_FILE="$1"
+                shift
+            fi
+            ;;
+        --svd)
+            ACTION="svd"
+            shift
+            if [[ $# -gt 0 && ! "$1" =~ ^-- ]]; then
+                TARGET_SVD="$1"
+                shift
+            fi
+            ;;
+        --carve|-c)
+            ACTION="carve"
+            shift
+            if [[ $# -gt 0 && ! "$1" =~ ^-- ]]; then
+                TARGET_FILE="$1"
+                shift
+            fi
+            if [[ $# -gt 0 && ! "$1" =~ ^-- ]]; then
+                CARVE_OUTDIR="$1"
+                shift
+            fi
+            ;;
+        --purge-projects|--clean)
+            ACTION="purge-projects"
+            shift
+            ;;
+        --reimport|-r)
+            ACTION="reimport"
+            shift
+            if [[ $# -gt 0 && ! "$1" =~ ^-- ]]; then
+                TARGET_FILE="$1"
+                shift
+            fi
+            ;;
+        --diff|-d)
+            ACTION="diff"
+            shift
+            if [[ $# -ge 2 ]]; then
+                TARGET_DIFF1="$1"
+                TARGET_DIFF2="$2"
+                shift 2
+            else
+                log_error "--diff requires two JSON report files"
+                exit 1
+            fi
+            ;;
+        --format)
+            shift
+            if [[ $# -gt 0 ]]; then
+                FORMAT="$1"
+                shift
+            fi
+            ;;
+        --parallel|-j)
+            shift
+            if [[ $# -gt 0 && "$1" =~ ^[0-9]+$ ]]; then
+                PARALLEL_JOBS="$1"
+                shift
+            else
+                PARALLEL_JOBS="2"
+            fi
+            ;;
+        --webhook)
+            shift
+            if [[ $# -gt 0 ]]; then
+                WEBHOOK_URL="$1"
+                shift
+            fi
+            ;;
+        --detect-type)
+            shift
+            if [[ $# -gt 0 ]]; then
+                detect_file_type "$1"
+                exit 0
+            fi
+            ;;
+        --findcrypt)
+            RUN_FINDCRYPT="true"
+            shift
+            ;;
+        --full-disasm)
+            FULL_DISASM="true"
+            shift
+            ;;
+        *)
+            if [ -z "$TARGET_FILE" ] && [ -z "$ACTION" ]; then
+                TARGET_FILE="$1"
+                ACTION="analyze"
+            fi
+            shift
+            ;;
+    esac
+done
+
+case "$ACTION" in
+    batch)
+        print_banner
+        batch_process
+        ;;
+    watch)
+        print_banner
+        watch_ingress
+        ;;
+    search)
+        search_reports "$SEARCH_TERM"
+        ;;
+    list-projects)
+        print_banner
+        list_projects
+        ;;
+    purge-projects)
+        print_banner
+        purge_projects
+        ;;
+    carve)
+        print_banner
+        if [ -z "$TARGET_FILE" ]; then
+            log_error "Usage: $0 --carve <binary-file> [out_dir]"
+            exit 1
+        fi
+        CARVE_OUTDIR="${CARVE_OUTDIR:-$OUTPUT_DIR/$(basename "$TARGET_FILE")_carved}"
+        python3 "$SCRIPTS_DIR/firmware_carver.py" scan "$TARGET_FILE"
+        python3 "$SCRIPTS_DIR/firmware_carver.py" extract "$TARGET_FILE" "$CARVE_OUTDIR"
+        ;;
+    rules)
+        print_banner
+        evaluate_capabilities "${TARGET_FILE:-}"
+        ;;
+    trace)
+        print_banner
+        correlate_trace "${TARGET_TRACE:-}" "${TARGET_FILE:-}"
+        ;;
+    svd)
+        print_banner
+        inspect_svd "${TARGET_SVD:-}"
+        ;;
+    serve)
+        print_banner
+        serve_dashboard "${SERVE_PORT:-8080}"
+        ;;
+    reimport)
+        print_banner
+        if [ -z "$TARGET_FILE" ]; then
+            log_error "Usage: $0 --reimport <binary-file>"
+            exit 1
+        fi
+        process_binary "$TARGET_FILE" true
+        ;;
+    diff)
+        print_banner
+        diff_reports "$TARGET_DIFF1" "$TARGET_DIFF2"
+        ;;
+    analyze)
+        print_banner
+        if [ -z "$TARGET_FILE" ]; then
+            log_error "No binary file specified."
+            echo ""
+            show_help
+            exit 1
+        fi
+        process_binary "$TARGET_FILE" false
+        ;;
+    *)
+        print_banner
+        show_help
+        exit 0
+        ;;
+esac
+\t'
+    read -r project_name output_key <<< "$identity_line"
+    if [ -z "$project_name" ] || [ -z "$output_key" ]; then
+        log_error "Could not derive a safe project/output identity for: $binary_path"
+        return 1
+    fi
 
     if [ -f "$PROJECTS_DIR/${project_name}.gpr" ] && [ "$force_reimport" != "true" ]; then
         log_info "Project already exists: $project_name"
