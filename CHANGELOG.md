@@ -6,6 +6,7 @@ All notable changes to this project are documented here.
 
 ### Fixed
 - Trigger SNES raw 65816 fallback when the optional loader exits nonzero even if its diagnostic text changes; test generic failures and fallback status preservation, and add a real-Ghidra container acceptance path for the generated SNES LoROM fixture.
+- Add `schema_version: 1.0.0` and a Draft 7 JSON Schema for primary report output; escape every U+0000–U+001F character and round-trip adversarial strings through a real JSON parser in CI.
 - Make the headless launcher honor `GHIDRA_ROOT` and `JAVA_HOME`, use Ghidra's supported launcher for standard installs, and retain the Flatpak direct-JVM workaround with paths derived from the detected installation.
 - Pin the container to Ghidra 12.2 with JDK 25, verify the official release SHA-256 before extraction, report detected Ghidra/Java versions, and add an actual core-PE analysis/report integration smoke job.
 - Add mocked regression coverage for standard and Flatpak launcher selection and invalid Java configuration.
