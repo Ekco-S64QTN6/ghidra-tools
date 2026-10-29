@@ -26,7 +26,7 @@ Repository-specific guidance for contributors and coding agents.
 - `process_binary()` locks a report identity before touching its Ghidra project and holds the lock through analysis, export, and latest-link updates. The OS advisory lock is implemented in `scripts/output_lock.py` and `scripts/output_lock.sh`. **Do not unlink or routinely clean files in `output/.locks/`**: a waiter could hold the old inode while a later process locks a newly created inode.
 - Reports are generated in a private `.stage.*` directory. Failed exports should not replace a previous `report_latest.*` target; abandoned staging directories are cleaned by the next run for that identity.
 - `scripts/atomic_publish.py` replaces each latest symlink atomically, one format at a time. The set of links for multiple formats is **not** a single transaction; document this limitation rather than implying all formats switch together.
-- The SQLite index treats canonical JSON report paths as idempotent identities, preserving same-basename runs. Search is currently SQLite `LIKE` over selected metadata rather than FTS5, and extracted strings/symbols are not fully indexed.
+- The SQLite index treats canonical JSON report paths as idempotent identities, preserving same-basename runs. Search combines `LIKE` over metadata/APIs/IOCs/indicators with migration-tracked external-content FTS5 over selected text fields (recovered strings, functions/symbols, exports, rules/capabilities/findings). Re-indexing a JSON path refreshes FTS text via triggers. Old rows can be schema-migrated but need their source JSON re-indexed to populate text that was never stored in SQLite.
 
 ## Documentation and review discipline
 
