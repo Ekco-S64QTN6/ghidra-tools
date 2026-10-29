@@ -191,31 +191,21 @@ class ArchitectureDetectorTests(unittest.TestCase):
             self.assertEqual(result["format"], "elf")
             self.assertEqual(result["processor"], "x86:LE:64:default")
 
-        direct_type = subprocess.run(
-            [sys.executable, os.path.join(REPO_ROOT, "scripts", "architecture_detector.py"), "type", path],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(direct_type.stdout.strip(), "elf")
-
-        cli = subprocess.run(
-            [os.path.join(REPO_ROOT, "ghidra-report.sh"), "--detect-type", path],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        if cli.stdout.strip() != "elf":
-            trace = subprocess.run(
-                ["bash", "-x", os.path.join(REPO_ROOT, "ghidra-report.sh"), "--detect-type", path],
+            direct_type = subprocess.run(
+                [sys.executable, os.path.join(REPO_ROOT, "scripts", "architecture_detector.py"), "type", path],
+                check=True,
                 capture_output=True,
                 text=True,
             )
-            self.fail(
-                f"CLI should detect ELF, direct type={direct_type.stdout!r}, "
-                f"got stdout={cli.stdout!r}, stderr={cli.stderr!r}; "
-                f"shell trace tail={trace.stderr[-2500:]!r}"
+            self.assertEqual(direct_type.stdout.strip(), "elf")
+
+            cli = subprocess.run(
+                [os.path.join(REPO_ROOT, "ghidra-report.sh"), "--detect-type", path],
+                check=True,
+                capture_output=True,
+                text=True,
             )
+            self.assertEqual(cli.stdout.strip(), "elf", msg=f"stderr={cli.stderr!r}")
 
         with open(os.path.join(REPO_ROOT, "ghidra-report.sh"), encoding="utf-8") as handle:
             shell = handle.read()
