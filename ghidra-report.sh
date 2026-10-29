@@ -462,14 +462,14 @@ batch_process() {
         -o -iname "*.rom" -o -iname "*.fig" \
     \) | sort)
 
-    local total="\${#files[@]}"
+    local total="${#files[@]}"
     if [ "$total" -eq 0 ]; then
         log_warn "No supported binaries found in $INGRESS_DIR"
         log_info "Supported extensions: .bin .sfc .smc .exe .dll .sys .elf .so .o .rom .fig"
         return 0
     fi
 
-    local jobs="\${PARALLEL_JOBS:-1}"
+    local jobs="${PARALLEL_JOBS:-1}"
     if [[ ! "$jobs" =~ ^[1-9][0-9]*$ ]]; then
         log_error "Parallel worker count must be a positive integer, got: $jobs"
         return 2
@@ -479,19 +479,19 @@ batch_process() {
     fi
 
     if [ "$jobs" -gt 1 ]; then
-        log_step "Dispatching $total file(s) across \${BOLD}$jobs parallel workers\${NC}..."
+        log_step "Dispatching $total file(s) across ${BOLD}$jobs parallel workers${NC}..."
     else
         log_step "Processing $total file(s) serially..."
     fi
 
-    if run_batch_workers "$jobs" process_binary "\${files[@]}"; then
+    if run_batch_workers "$jobs" process_binary "${files[@]}"; then
         echo ""
-        log_success "Batch processing complete: \${BATCH_SUCCESS_COUNT}/\${BATCH_TOTAL_COUNT} succeeded, 0 failed."
+        log_success "Batch processing complete: ${BATCH_SUCCESS_COUNT}/${BATCH_TOTAL_COUNT} succeeded, 0 failed."
         return 0
     else
         local batch_status=$?
         echo ""
-        log_error "Batch processing finished: \${BATCH_SUCCESS_COUNT}/\${BATCH_TOTAL_COUNT} succeeded, \${BATCH_FAILURE_COUNT} failed."
+        log_error "Batch processing finished: ${BATCH_SUCCESS_COUNT}/${BATCH_TOTAL_COUNT} succeeded, ${BATCH_FAILURE_COUNT} failed."
         return "$batch_status"
     fi
 }
