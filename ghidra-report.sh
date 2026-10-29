@@ -288,7 +288,22 @@ generate_report() {
     timestamp="$(date +%Y%m%d_%H%M%S)_$_${RANDOM}"
     local file_output_dir="$OUTPUT_DIR/$output_key"
     mkdir -p "$file_output_dir"
-    local report_base="$file_output_dir/${binary_name}_report_${timestamp}"
+    # A SIGKILL or host shutdown can bypass normal cleanup. Since process_binary
+    # holds this identity's lock, any existing stage belongs to a dead/failed run.
+    local stale_stage
+    for stale_stage in "$file_output_dir"/.stage.*; do
+        if [ -d "$stale_stage" ]; then
+            rm -rf "$stale_stage"
+        fi
+    done
+    local stage_dir
+    if ! stage_dir="$(mktemp -d "$file_output_dir/.stage.XXXXXX")"; then
+        log_error "Could not create a private report staging directory."
+        return 1
+    fi
+    # Include mktemp's random stage token so completed report names do not clobber
+    # an older immutable run even if a clock/PID/random suffix is reused.
+    local report_base="$stage_dir/${binary_name}_report_${timestamp}_${stage_dir##*.}"
 
     log_step "Generating report(s) for: ${BOLD}$binary_name${NC} [Formats: ${BOLD}$FORMAT${NC}]"
 
@@ -314,18 +329,14 @@ generate_report() {
 
     if [ "$report_status" -ne 0 ]; then
         log_error "Ghidra report generation failed with exit status $report_status."
-        # A failed export can leave partial files; remove only this run's
-        # uniquely named artifacts and leave previous latest symlinks untouched.
-        for ext in txt json md html sarif yar misp.json; do
-            rm -f "${report_base}.${ext}"
-        done
+        # Partial exporter output stays inside a private staging directory.
+        # Remove it on failure without touching prior reports or latest links.
+        rm -rf "$stage_dir"
         rm -f "$report_log"
         return "$report_status"
     fi
     rm -f "$report_log"
 
-    local txt_report="${report_base}.txt"
-    local json_report="${report_base}.json"
     local has_report=false
     for ext in txt json md html sarif yar misp.json; do
         if [ -f "${report_base}.${ext}" ]; then
@@ -335,19 +346,54 @@ generate_report() {
     done
 
     if [ "$has_report" = true ]; then
+        # Nothing is visible in the output directory until the exporter has
+        # finished successfully. Rename complete artifacts onto the same
+        # filesystem before atomically replacing any report_latest.* links.
+        local published_files=()
+        for ext in txt json md html sarif yar misp.json; do
+            local staged_file="${report_base}.${ext}"
+            if [ -f "$staged_file" ]; then
+                local final_file="$file_output_dir/$(basename "$staged_file")"
+                if [ -e "$final_file" ] || [ -L "$final_file" ]; then
+                    for published_file in "${published_files[@]}"; do
+                        rm -f "$published_file"
+                    done
+                    rm -rf "$stage_dir"
+                    log_error "Refusing to overwrite an existing immutable report artifact: $(basename "$final_file")"
+                    return 1
+                fi
+                if ! mv "$staged_file" "$final_file"; then
+                    for published_file in "${published_files[@]}"; do
+                        rm -f "$published_file"
+                    done
+                    rm -rf "$stage_dir"
+                    log_error "Could not publish completed report artifact: $(basename "$staged_file")"
+                    return 1
+                fi
+                published_files+=("$final_file")
+            fi
+        done
+        rm -rf "$stage_dir"
+        local txt_report="$file_output_dir/$(basename "${report_base}.txt")"
+        local json_report="$file_output_dir/$(basename "${report_base}.json")"
+        local latest_publish_status=0
+
         echo ""
         log_success "Reports generated successfully in: ${BOLD}$file_output_dir${NC}"
 
         for ext in txt json md html sarif yar misp.json; do
-            local f="${report_base}.${ext}"
+            local f="$file_output_dir/$(basename "${report_base}.${ext}")"
             if [ -f "$f" ]; then
                 local sz
                 sz="$(du -h "$f" | cut -f1)"
                 echo -e "    ${GREEN}●${NC} $(basename "$f")  ${DIM}($sz)${NC}"
-                ln -sf "$(basename "$f")" "$file_output_dir/report_latest.${ext}"
+                if ! python3 "$SCRIPTS_DIR/atomic_publish.py" symlink "$file_output_dir/report_latest.${ext}" "$(basename "$f")"; then
+                    log_error "Could not atomically update report_latest.${ext}; its previous target was retained."
+                    latest_publish_status=1
+                fi
             fi
         done
-        echo -e "    ${CYAN}➜${NC} Latest symlinks created: ${DIM}$file_output_dir/report_latest.*${NC}"
+        echo -e "    ${CYAN}➜${NC} Latest symlinks updated atomically per format: ${DIM}$file_output_dir/report_latest.*${NC}"
 
         # Index report in SQLite database
         if [ -f "$json_report" ] && [ -f "$SCRIPTS_DIR/index_report.py" ]; then
@@ -385,7 +431,9 @@ except Exception:
             grep -E "Functions identified:|Language:|Estimated code coverage:" "$txt_report" 2>/dev/null || true
             echo ""
         fi
+        return "$latest_publish_status"
     else
+        rm -rf "$stage_dir"
         log_error "Report generation failed — no output files created."
         return 1
     fi
