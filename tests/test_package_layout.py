@@ -100,8 +100,14 @@ def test_source_and_package_layouts():
             "Homebrew must keep support scripts/rules/schema beside the installed CLI")
     require('File.read("packaging/ghidra-report-launcher.sh.in")' in formula,
             "Homebrew must use the common package launcher template")
-    require('depends_on "pyyaml"' in formula,
-            "Homebrew must declare the YAML parser runtime dependency")
+    require('resource "pyyaml" do' in formula and "pyyaml-6.0.3.tar.gz" in formula,
+            "Homebrew must pin the YAML parser as a source resource")
+    require('sha256 "d76623373421df22fb4cf8817020cbb7ef15c725b9d5e45f17e189bfc384190f"' in formula,
+            "Homebrew must verify the pinned PyYAML source digest")
+    require('"-target", libexec/"vendor"' in formula,
+            "Homebrew must keep Python dependencies private to the app root")
+    require('APP_ROOT/vendor' in read("packaging/ghidra-report-launcher.sh.in"),
+            "the package launcher must add vendored Python dependencies to PYTHONPATH")
     require('pkgshare.install "scripts", "rules", "run-headless.sh"' not in formula,
             "Homebrew must not split runtime scripts away from the CLI directory")
 
