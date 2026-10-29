@@ -213,8 +213,8 @@ import_and_analyze() {
         "$HEADLESS" \
         "$PROJECTS_DIR" "$project_name" \
         -import "$binary_path" \
-        "\${extra_args[@]}" \
-        "\${post_scripts[@]}" \
+        "${extra_args[@]}" \
+        "${post_scripts[@]}" \
         -analysisTimeoutPerFile 300; then
         import_status=0
     else
@@ -229,7 +229,7 @@ import_and_analyze() {
             log_info "Falling back to raw import with 65816 processor..."
             echo ""
 
-            rm -rf "$PROJECTS_DIR/\${project_name}.rep" "$PROJECTS_DIR/\${project_name}.gpr"
+            rm -rf "$PROJECTS_DIR/${project_name}.rep" "$PROJECTS_DIR/${project_name}.gpr"
 
             local fallback_status=0
             if run_headless_logged "$import_log" fallback \
