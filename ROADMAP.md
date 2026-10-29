@@ -59,6 +59,8 @@ These findings come from source inspection, not a successful execution of the pr
 - Unsupported Ghidra/Java combinations fail early with a useful error.
 - Loader fallback is tested against both a successful import and an expected failure.
 
+**Incremental progress — 2026-10-29:** The launcher now honors an explicit or discovered `GHIDRA_ROOT`, validates `JAVA_HOME`, calls `support/analyzeHeadless` for standard installs, and derives the Flatpak JDK for the existing direct-JVM workaround. A mock-based regression test covers both launcher paths and invalid Java configuration. This does **not** close the gate: the Docker/Ghidra version mismatch, clean-container runtime smoke test, dependency/version diagnostics, and import-fallback failure handling remain open.
+
 ### 0.3 Turn CI into real, deterministic verification
 
 **Relevant files:** `.github/workflows/binary-analysis.yml`, `tests/run_tests.sh`, `tests/make_fixtures.py`.
