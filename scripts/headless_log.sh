@@ -37,7 +37,7 @@ run_headless_logged() {
                 fi
                 ;;
             report)
-                if printf '%s\\n' "$line" | grep -qE 'report:|Report written|rule:|ERROR|Script'; then
+                if printf '%s\n' "$line" | grep -qE 'report:|Report written|rule:|ERROR|Script'; then
                     show_line=true
                 fi
                 ;;
