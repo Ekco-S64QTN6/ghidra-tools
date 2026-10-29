@@ -12,7 +12,7 @@ def get_db():
     cur.execute("""
         CREATE TABLE IF NOT EXISTS reports (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            file TEXT UNIQUE,
+            file TEXT,
             timestamp TEXT,
             format_label TEXT,
             risk_score INTEGER,
@@ -56,14 +56,83 @@ def get_db():
             FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE
         )
     """)
+    _migrate_report_identity(conn)
     conn.commit()
     return conn
+
+
+def _has_unique_file_index(conn):
+    cur = conn.cursor()
+    for index in cur.execute("PRAGMA index_list(reports)").fetchall():
+        if not index[2]:
+            continue
+        columns = [
+            row[2]
+            for row in cur.execute(f"PRAGMA index_info('{index[1]}')").fetchall()
+        ]
+        if columns == ["file"]:
+            return True
+    return False
+
+
+def _migrate_report_identity(conn):
+    """Remove the legacy UNIQUE(file) constraint while preserving report IDs and findings."""
+    if _has_unique_file_index(conn):
+        conn.commit()
+        conn.execute("PRAGMA foreign_keys = OFF")
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute("""
+                CREATE TABLE reports_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    file TEXT,
+                    timestamp TEXT,
+                    format_label TEXT,
+                    risk_score INTEGER,
+                    risk_level TEXT,
+                    md5 TEXT,
+                    sha256 TEXT,
+                    imphash TEXT,
+                    function_count INTEGER,
+                    json_path TEXT
+                )
+            """)
+            conn.execute("""
+                INSERT INTO reports_new
+                    (id, file, timestamp, format_label, risk_score, risk_level,
+                     md5, sha256, imphash, function_count, json_path)
+                SELECT id, file, timestamp, format_label, risk_score, risk_level,
+                       md5, sha256, imphash, function_count, json_path
+                FROM reports
+            """)
+            conn.execute("DROP TABLE reports")
+            conn.execute("ALTER TABLE reports_new RENAME TO reports")
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.execute("PRAGMA foreign_keys = ON")
+
+    conn.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_json_path_unique
+        ON reports(json_path)
+    """)
+
+
+def _output_key_for_path(json_path, filename):
+    """Use the report's containing output directory to distinguish equal basenames."""
+    if json_path:
+        return os.path.basename(os.path.dirname(os.path.abspath(json_path))) or filename
+    return filename
+
 
 def index_report(json_path):
     if not os.path.exists(json_path):
         print(f"Error: JSON report not found: {json_path}", file=sys.stderr)
         return
 
+    json_path = os.path.realpath(json_path)
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
@@ -81,7 +150,8 @@ def index_report(json_path):
     cur.execute("""
         INSERT INTO reports (file, timestamp, format_label, risk_score, risk_level, md5, sha256, imphash, function_count, json_path)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(file) DO UPDATE SET
+        ON CONFLICT(json_path) DO UPDATE SET
+            file=excluded.file,
             timestamp=excluded.timestamp,
             format_label=excluded.format_label,
             risk_score=excluded.risk_score,
@@ -89,8 +159,7 @@ def index_report(json_path):
             md5=excluded.md5,
             sha256=excluded.sha256,
             imphash=excluded.imphash,
-            function_count=excluded.function_count,
-            json_path=excluded.json_path
+            function_count=excluded.function_count
     """, (
         filename,
         timestamp,
@@ -104,7 +173,7 @@ def index_report(json_path):
         json_path
     ))
     
-    cur.execute("SELECT id FROM reports WHERE file = ?", (filename,))
+    cur.execute("SELECT id FROM reports WHERE json_path = ?", (json_path,))
     report_id = cur.fetchone()[0]
 
     # Clean old child records
