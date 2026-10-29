@@ -31,6 +31,11 @@ def make_elf(elf_class, data_encoding, machine, length=None):
     endian = "<" if data_encoding == 1 else ">"
     if len(data) >= 20:
         struct.pack_into(endian + "H", data, 18, machine)
+    if len(data) >= 24:
+        struct.pack_into(endian + "I", data, 20, 1)  # e_version = EV_CURRENT
+    header_size_offset = 40 if elf_class == 1 else 52
+    if len(data) >= header_size_offset + 2:
+        struct.pack_into(endian + "H", data, header_size_offset, required)  # e_ehsize
     return bytes(data)
 
 
