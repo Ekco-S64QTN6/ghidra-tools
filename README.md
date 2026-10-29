@@ -370,7 +370,7 @@ cd ghidra-tools
 ./ghidra-report.sh --help
 ```
 
-Needs Ghidra 12.x and Java 21. `GHIDRA_ROOT` overrides autodetection.
+Host installs must use a Java runtime supported by the installed Ghidra release. The pinned container uses Ghidra 12.2 and JDK 25; `GHIDRA_ROOT` overrides autodetection, and the launcher prints its detected runtime versions.
 
 ### Docker
 
@@ -378,8 +378,7 @@ Needs Ghidra 12.x and Java 21. `GHIDRA_ROOT` overrides autodetection.
 docker compose run --rm ghidra-report --batch
 ```
 
-The image pins Eclipse Temurin JDK 21 with the headless analyzer preconfigured;
-`ingress/` and `output/` are bind-mounted.
+The image pins Ghidra 12.2 and Eclipse Temurin JDK 25, verifies the official release archive checksum, and preconfigures the headless analyzer. `ingress/` and `output/` are bind-mounted. GitHub Actions builds this image and runs a synthetic PE through the real analyzer, checking all seven artifacts and the JSON, SARIF, and MISP envelopes.
 
 ### Packages
 
@@ -437,13 +436,13 @@ The history-indexer tests verify that the current report fields (`generated`, `i
 ./tests/run_tests.sh
 ```
 
-This suite generates its PE and SNES fixtures, but the analysis itself requires a
-compatible Ghidra installation and Java. The script also currently checks for
-community extensions in a Flatpak-specific directory under
-`~/.config/ghidra/ghidra_12.1.3_FLATPAK/Extensions`, so it is **not yet portable to a
-fresh checkout or part of default CI**. Removing that assumption and running the
-full headless/schema suite in a pinned, reproducible environment remain open
-roadmap work.
+This suite generates its PE and SNES fixtures and requires a compatible Ghidra
+installation and Java. Community extensions are optional; `GHIDRA_EXTENSION_ROOT`
+can identify a per-user extension root, and the suite reports extension inventory
+as skipped when seven community extensions are not available. That skip does not
+verify extension-backed loaders. The default CI runs a smaller pinned-container
+PE analysis/report smoke test; running this entire suite in default CI remains
+open roadmap work.
 
 The integration suite is intended to cover the seven report artifacts, scoring,
 MISP/SARIF output, SNES header/MMIO/DMA extraction, semantic diffing, firmware
