@@ -18,16 +18,28 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Java 25 for JSON escaping regression
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Install capability-rule dependency
-        run: python3 -m pip install -r requirements-rules.txt
+      - name: Install test dependencies
+        run: python3 -m pip install -r requirements-rules.txt -r requirements-test.txt
 
       - name: Compile Python sources and tests
         run: python3 -m compileall -q scripts tests
+
+      - name: Test Java JSON escaping against a real JSON parser
+        run: python3 tests/test_report_format.py
+
+      - name: Test versioned JSON report schema
+        run: python3 tests/test_report_schema.py
 
       - name: Test validated file and processor detection
         run: python3 tests/test_architecture_detector.py
@@ -105,11 +117,15 @@ jobs:
           done
           python3 - "$report_dir" <<'PYTHON'
           import json
+          import jsonschema
           import pathlib
           import sys
 
           reports = pathlib.Path(sys.argv[1])
+          schema = json.loads(pathlib.Path("/workspace/schemas/report-v1.schema.json").read_text(encoding="utf-8"))
           report = json.loads((reports / "report_latest.json").read_text(encoding="utf-8"))
+          jsonschema.validate(report, schema)
+          assert report.get("schema_version") == "1.0.0", "report must declare schema_version 1.0.0"
           sarif = json.loads((reports / "report_latest.sarif").read_text(encoding="utf-8"))
           misp = json.loads((reports / "report_latest.misp.json").read_text(encoding="utf-8"))
           assert isinstance(report, dict), "analysis JSON must be an object"
@@ -138,11 +154,15 @@ jobs:
           done
           python3 - "$snes_report_dir" <<'PYTHON'
           import json
+          import jsonschema
           import pathlib
           import sys
 
           reports = pathlib.Path(sys.argv[1])
+          schema = json.loads(pathlib.Path("/workspace/schemas/report-v1.schema.json").read_text(encoding="utf-8"))
           report = json.loads((reports / "report_latest.json").read_text(encoding="utf-8"))
+          jsonschema.validate(report, schema)
+          assert report.get("schema_version") == "1.0.0", "SNES report must declare schema_version 1.0.0"
           assert report.get("snes", {}).get("valid_header") is True, "SNES header should validate"
           assert "LoROM" in report["snes"].get("mapping_mode", ""), "fixture should be classified as LoROM"
           assert report.get("analysis_stats", {}).get("function_count", 0) > 0, "raw 65816 analysis should recover functions"
