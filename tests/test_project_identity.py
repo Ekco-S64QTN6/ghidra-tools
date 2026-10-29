@@ -117,6 +117,7 @@ class ProjectIdentityTests(unittest.TestCase):
             path = os.path.join(temp, "sample.bin")
             with open(path, "wb") as handle:
                 handle.write(b"cli sample")
+
             result = subprocess.run(
                 [sys.executable, os.path.join(REPO_ROOT, "scripts", "project_identity.py"), path, "false", ""],
                 check=True,
@@ -125,23 +126,23 @@ class ProjectIdentityTests(unittest.TestCase):
             )
             self.assertEqual(result.stdout.strip(), project_identity.project_identity(path, "false", ""))
 
-        output_cli = subprocess.run(
-            [sys.executable, os.path.join(REPO_ROOT, "scripts", "project_identity.py"), "output", path],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(output_cli.stdout.strip(), project_identity.output_identity(path))
+            output_cli = subprocess.run(
+                [sys.executable, os.path.join(REPO_ROOT, "scripts", "project_identity.py"), "output", path],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(output_cli.stdout.strip(), project_identity.output_identity(path))
 
-        identity_cli = subprocess.run(
-            [sys.executable, os.path.join(REPO_ROOT, "scripts", "project_identity.py"), "identities", path, "false", ""],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        project_name, output_key = identity_cli.stdout.rstrip("\n").split("\t")
-        self.assertEqual(project_name, project_identity.project_identity(path, "false", ""))
-        self.assertEqual(output_key, project_identity.output_identity(path))
+            identity_cli = subprocess.run(
+                [sys.executable, os.path.join(REPO_ROOT, "scripts", "project_identity.py"), "identities", path, "false", ""],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            project_name, output_key = identity_cli.stdout.rstrip("\n").split("\t")
+            self.assertEqual(project_name, project_identity.project_identity(path, "false", ""))
+            self.assertEqual(output_key, project_identity.output_identity(path))
 
         with open(os.path.join(REPO_ROOT, "ghidra-report.sh"), encoding="utf-8") as handle:
             shell = handle.read()
