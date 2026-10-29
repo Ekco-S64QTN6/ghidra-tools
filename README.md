@@ -82,6 +82,8 @@ automatically; anything else, set `GHIDRA_ROOT`.
 
 One run writes every artifact into `output/<output_key>/`, plus `report_latest.*` symlinks that point at the newest report in that identity. The stable key combines a sanitized filename, canonical source-path hash, and content hash, so files with the same basename (or changed bytes at a reused path) do not share outputs. Get the key with `python3 scripts/project_identity.py output <binary_path>`; for `--diff`, `--rules`, and `--trace`, pass that key to select one exact report. A basename is accepted only when it uniquely identifies an output directory.
 
+Exports are first written to a private staging directory inside the identity output directory. Only after the exporter exits successfully are completed files moved into place and each `report_latest.*` symlink atomically replaced. This prevents readers from seeing a half-written report through an existing latest link. The set of links for multiple formats is not switched as one transaction, so a failure between formats can leave links pointing to different successful runs.
+
 Concurrent invocations for the same output identity are serialized across project import, analysis, report export, and `report_latest.*` updates. This protects the shared Ghidra project and latest-report pointers while allowing different identities to run in parallel. The default lock wait is 900 seconds; set `GHIDRA_OUTPUT_LOCK_TIMEOUT` to an integer from 1 to 86400 to change it. A timeout fails closed instead of allowing competing writers to continue.
 
 | Artifact | What it is for |
