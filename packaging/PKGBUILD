@@ -15,15 +15,17 @@ source=("$pkgname-$pkgver.tar.gz::https://github.com/Ekco-S64QTN6/ghidra-tools/a
 sha256sums=('SKIP')
 
 package() {
-    cd "$srcdir/ghidra-tools-$pkgver"
-    install -Dm755 ghidra-report.sh "$pkgdir/usr/bin/ghidra-report"
-    install -Dm755 run-headless.sh "$pkgdir/usr/lib/ghidra-report/run-headless.sh"
+    app_root="$pkgdir/usr/lib/ghidra-report/app"
+    install -d "$app_root"
+    install -Dm755 ghidra-report.sh "$app_root/ghidra-report.sh"
+    install -Dm755 run-headless.sh "$app_root/run-headless.sh"
+    install -Dm644 VERSION "$app_root/VERSION"
+    install -Dm644 requirements-rules.txt "$app_root/requirements-rules.txt"
+    cp -r scripts rules schemas "$app_root/"
+
+    install -Dm755 packaging/ghidra-report-launcher.sh.in "$pkgdir/usr/bin/ghidra-report"
+    sed -i 's|@APP_ROOT@|/usr/lib/ghidra-report/app|g' "$pkgdir/usr/bin/ghidra-report"
+
     install -Dm644 ghidra-report.1 "$pkgdir/usr/share/man/man1/ghidra-report.1"
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
-
-    mkdir -p "$pkgdir/usr/lib/ghidra-report/scripts"
-    cp -r scripts/* "$pkgdir/usr/lib/ghidra-report/scripts/"
-
-    mkdir -p "$pkgdir/usr/lib/ghidra-report/rules"
-    cp -r rules/* "$pkgdir/usr/lib/ghidra-report/rules/"
 }
