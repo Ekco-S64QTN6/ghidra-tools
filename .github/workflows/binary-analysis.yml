@@ -35,6 +35,9 @@ jobs:
       - name: Test portable headless launcher
         run: bash tests/test_run_headless.sh
 
+      - name: Test batch failure propagation
+        run: bash tests/test_batch_runner.sh
+
       - name: Test dashboard security and HTTP behavior
         run: python3 tests/test_dashboard_security.py
 
