@@ -282,8 +282,8 @@ generate_report() {
     local project_name="$1"
     local binary_name="$2"
     local output_key="${3:-$binary_name}"
-    local timestamp
-    timestamp="$(date +%Y%m%d_%H%M%S)"
+    # Keep each invocation's artifacts separate, even if repeated runs start in the same second.
+    timestamp="$(date +%Y%m%d_%H%M%S)_$$_${RANDOM}"
     local file_output_dir="$OUTPUT_DIR/$output_key"
     mkdir -p "$file_output_dir"
     local report_base="$file_output_dir/${binary_name}_report_${timestamp}"
@@ -295,18 +295,32 @@ generate_report() {
         extra_script_flag="--full-disasm"
     fi
 
-    "$HEADLESS" \
+    local report_log report_status=0
+    report_log="$(mktemp)"
+    if run_headless_logged "$report_log" report \
+        "$HEADLESS" \
         "$PROJECTS_DIR" "$project_name" \
         -process "$binary_name" \
         -readOnly \
         -noanalysis \
         -scriptPath "$SCRIPTS_DIR" \
-        -postScript ExportFullReport.java "$report_base" "$FORMAT" "$extra_script_flag" \
-        2>&1 | while IFS= read -r line; do
-            if echo "$line" | grep -qE "report:|Report written|rule:|ERROR|Script"; then
-                echo -e "    ${DIM}$line${NC}"
-            fi
+        -postScript ExportFullReport.java "$report_base" "$FORMAT" "$extra_script_flag"; then
+        report_status=0
+    else
+        report_status=$?
+    fi
+
+    if [ "$report_status" -ne 0 ]; then
+        log_error "Ghidra report generation failed with exit status $report_status."
+        # A failed export can leave partial files; remove only this run's
+        # uniquely named artifacts and leave previous latest symlinks untouched.
+        for ext in txt json md html sarif yar misp.json; do
+            rm -f "${report_base}.${ext}"
         done
+        rm -f "$report_log"
+        return "$report_status"
+    fi
+    rm -f "$report_log"
 
     local txt_report="${report_base}.txt"
     local json_report="${report_base}.json"
