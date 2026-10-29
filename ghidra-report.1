@@ -84,5 +84,7 @@ Each analyzed input receives dedicated outputs in \fBoutput/<output_key>/\fR. Th
 \- MISP standard Threat Event JSON format for direct threat intel platform ingestion.
 .PP
 The output key can be printed with \fBpython3 scripts/project_identity.py output <binary_path>\fR. Use that key with \fB\-\-diff\fR, \fB\-\-rules\fR, or \fB\-\-trace\fR to select a specific report. A basename is accepted only when it resolves to one output directory.
+.PP
+Concurrent invocations that resolve to the same output identity are serialized across project import, analysis, report export, and latest-link updates. Different identities can still run in parallel. The default lock wait is 900 seconds; set \fBGHIDRA_OUTPUT_LOCK_TIMEOUT\fR to an integer between 1 and 86400 to change it. A timeout fails the run rather than allowing competing writers to proceed.
 .SH AUTHOR
 Google DeepMind Advanced Agentic Coding Pair Programmer.

@@ -82,6 +82,8 @@ automatically; anything else, set `GHIDRA_ROOT`.
 
 One run writes every artifact into `output/<output_key>/`, plus `report_latest.*` symlinks that point at the newest report in that identity. The stable key combines a sanitized filename, canonical source-path hash, and content hash, so files with the same basename (or changed bytes at a reused path) do not share outputs. Get the key with `python3 scripts/project_identity.py output <binary_path>`; for `--diff`, `--rules`, and `--trace`, pass that key to select one exact report. A basename is accepted only when it uniquely identifies an output directory.
 
+Concurrent invocations for the same output identity are serialized across project import, analysis, report export, and `report_latest.*` updates. This protects the shared Ghidra project and latest-report pointers while allowing different identities to run in parallel. The default lock wait is 900 seconds; set `GHIDRA_OUTPUT_LOCK_TIMEOUT` to an integer from 1 to 86400 to change it. A timeout fails closed instead of allowing competing writers to continue.
+
 | Artifact | What it is for |
 |:--|:--|
 | **`.txt`** | The analyst's read. Triage box, memory map with entropy, ATT&CK table, IOCs, ranked disassembly, decompiled C. |
@@ -193,7 +195,7 @@ File types are validated against header signatures and structural fields before 
 | Flag | Effect |
 |:--|:--|
 | `--format <txt\|json\|md\|html\|sarif\|yar\|misp\|all>` | Which artifacts to write (default `all`) |
-| `--parallel`, `-j [N]` | Analyze ingress files across N worker processes |
+| `--parallel`, `-j [N]` | Analyze ingress files across N worker processes; identical output identities are serialized |
 | `--full-disasm` | Disassemble every function, not the top 15 |
 | `--findcrypt` | Scan for 124+ cryptographic constants (AES, ChaCha, MD5, SHA, CRC32, RC4, TEA/XTEA) |
 | `--webhook <url>` | POST a triage alert to Slack / Discord / any webhook |

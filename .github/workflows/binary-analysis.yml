@@ -47,8 +47,11 @@ jobs:
       - name: Test report generation exit-status handling
         run: bash tests/test_report_generation.sh
 
+      - name: Test same-output concurrency locking
+        run: bash tests/test_output_lock.sh
+
       - name: Check shell script syntax
-        run: bash -n ghidra-report.sh scripts/headless_log.sh tests/test_headless_log.sh tests/test_report_generation.sh
+        run: bash -n ghidra-report.sh scripts/headless_log.sh scripts/output_lock.sh tests/test_headless_log.sh tests/test_report_generation.sh tests/test_output_lock.sh
 
       - name: Test batch failure propagation
         run: bash tests/test_batch_runner.sh
