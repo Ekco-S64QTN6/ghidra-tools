@@ -48,7 +48,11 @@ acquire_output_lock() {
     fi
     if [[ "$response" != "LOCKED" ]]; then
         release_output_lock
-        log_error "Could not acquire report-output lock for identity: $output_key ($response)"
+        if [[ "$response" == *"timed out"* ]]; then
+            log_error "Timed out waiting for report-output lock: $output_key"
+        else
+            log_error "Could not acquire report-output lock for identity: $output_key ($response)"
+        fi
         return 1
     fi
     return 0
