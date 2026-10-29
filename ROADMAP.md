@@ -242,6 +242,8 @@ These findings come from source inspection, not a successful execution of the pr
 
 **Incremental progress — 2026-10-29:** Batch execution now uses a shared, tested worker scheduler that waits for every child exactly once, records per-item success/failure counts, attempts remaining items after a failure, rejects non-positive worker counts, and returns nonzero when any item fails. A synthetic shell regression covers mixed results, all-success results, and invalid worker counts. Collision-resistant project identity, atomic output publication, timeouts/cancellation, and retry policy remain open.
 
+**Incremental progress — 2026-10-29:** Ghidra project IDs now include a sanitized basename, canonical source-path hash, full-content SHA-256 prefix, and a hash of project-affecting settings (FindCrypt and Ghidra root). This prevents same-basename inputs from sharing a project and avoids reusing a cached project after sample content changes. Synthetic tests cover same basenames in different directories, content changes at one path, stable identities, setting changes, safe name limits, and the CLI hook. Output directories and `report_latest.*` are still keyed by basename and can collide; per-output identity/locking and atomic publication remain open follow-up work.
+
 ---
 
 ## P1 — Packaging, deployment, and documentation consistency
