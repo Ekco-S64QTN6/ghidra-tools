@@ -19,6 +19,7 @@ All notable changes to this project are documented here.
 - Reject truncated U-Boot uImage payloads whose declared length exceeds the available input and add synthetic bounds regression tests.
 - Normalize top-level array and CAPE-style dynamic traces, preserve event metadata, compare API names case-insensitively, and prevent cross-process attack-chain matches.
 - Index current report timestamps, IOCs, and indicator ATT&CK IDs correctly while preserving compatibility with older field names.
+- Backfill a migration-tracked FTS5 index from report JSON text fields, synchronize it on re-index, and expose ranked snippets in CLI/dashboard search alongside existing metadata/API/IOC `LIKE` searches.
 - Require an actual YAML parser for capability rules, validate supported operators, primitive types, rule metadata, weights and unknown keys at load time, fail visibly on invalid rules, and add rule-loading/operator regression tests.
 - Correct README, man-page, and project-plan claims about history search: the current indexer uses SQLite `LIKE`, searches only metadata/APIs/IOCs/indicators, and overwrites a row when the filename repeats.
 - Make batch execution report per-item success/failure counts and return nonzero when any sample fails, while continuing the remaining items.
