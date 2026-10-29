@@ -54,7 +54,7 @@ jobs:
         run: bash tests/test_output_lock.sh
 
       - name: Check shell script syntax
-        run: bash -n ghidra-report.sh scripts/headless_log.sh scripts/output_lock.sh tests/test_headless_log.sh tests/test_report_generation.sh tests/test_output_lock.sh
+        run: bash -n ghidra-report.sh run-headless.sh scripts/headless_log.sh scripts/output_lock.sh tests/test_headless_log.sh tests/test_report_generation.sh tests/test_output_lock.sh
 
       - name: Test batch failure propagation
         run: bash tests/test_batch_runner.sh
@@ -73,3 +73,49 @@ jobs:
 
       - name: Test capability rule loading and operators
         run: python3 tests/test_capability_engine.py
+  ghidra-container-smoke:
+    name: Ghidra 12.2 Container Analysis Smoke (JDK 25)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build pinned Ghidra container
+        run: docker build --pull -t ghidra-report-smoke .
+
+      - name: Analyze synthetic PE with real Ghidra and validate artifacts
+        run: |
+          docker run --rm --entrypoint /bin/bash ghidra-report-smoke -s <<'CONTAINER'
+          set -euo pipefail
+          fixture_dir="$(mktemp -d)"
+          trap 'rm -rf "$fixture_dir"' EXIT
+          python3 /workspace/tests/make_fixtures.py "$fixture_dir" >/dev/null
+          /workspace/ghidra-report.sh --reimport "$fixture_dir/packed_sample.dll" --format all
+          output_key="$(python3 /workspace/scripts/project_identity.py output "$fixture_dir/packed_sample.dll")"
+          report_dir="/workspace/output/$output_key"
+          for ext in txt json md html sarif yar misp.json; do
+              test -s "$report_dir/report_latest.$ext" || {
+                  echo "Missing or empty report_latest.$ext" >&2
+                  exit 1
+              }
+          done
+          python3 - "$report_dir" <<'PYTHON'
+          import json
+          import pathlib
+          import sys
+
+          reports = pathlib.Path(sys.argv[1])
+          report = json.loads((reports / "report_latest.json").read_text(encoding="utf-8"))
+          sarif = json.loads((reports / "report_latest.sarif").read_text(encoding="utf-8"))
+          misp = json.loads((reports / "report_latest.misp.json").read_text(encoding="utf-8"))
+          assert isinstance(report, dict), "analysis JSON must be an object"
+          assert report.get("file"), "analysis JSON must identify the input file"
+          assert sarif.get("version") == "2.1.0", "SARIF must declare version 2.1.0"
+          assert isinstance(sarif.get("runs"), list) and sarif["runs"], "SARIF must contain a run"
+          assert isinstance(misp.get("Event"), dict), "MISP export must contain an Event object"
+          assert misp["Event"].get("Attribute"), "MISP export must contain attributes for the synthetic PE"
+          print("PASS: Ghidra import and analysis produced all seven non-empty report formats with valid JSON/SARIF/MISP envelopes")
+          PYTHON
+          CONTAINER
+

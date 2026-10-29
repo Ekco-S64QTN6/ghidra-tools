@@ -50,6 +50,30 @@ elif ! command -v java >/dev/null 2>&1; then
     exit 1
 fi
 
+# Report the runtime selected by this launcher. This is diagnostic rather than
+# a loose version gate: compatibility also depends on extensions and processors.
+JAVA_BIN="$(command -v java)"
+JAVA_VERSION_OUTPUT="$("$JAVA_BIN" -version 2>&1)" || {
+    echo "[ERROR] Could not query the selected Java runtime: $JAVA_BIN" >&2
+    exit 1
+}
+JAVA_VERSION_LINE="$(echo "$JAVA_VERSION_OUTPUT" | sed -n '1p')"
+GHIDRA_VERSION=""
+for properties_path in "$GHIDRA_ROOT/Ghidra/application.properties" "$GHIDRA_ROOT/application.properties"; do
+    if [[ -r "$properties_path" ]]; then
+        GHIDRA_VERSION="$(awk -F= '/^[[:space:]]*application[.]version[[:space:]]*=/ { sub(/^[^=]*=/, ""); gsub(/^[[:space:]]+|[[:space:]]+$/, ""); print; exit }' "$properties_path")"
+        if [[ -n "$GHIDRA_VERSION" ]]; then
+            break
+        fi
+    fi
+done
+if [[ -z "$GHIDRA_VERSION" ]]; then
+    GHIDRA_VERSION="unknown (version metadata missing)"
+fi
+echo "[INFO] Ghidra root: $GHIDRA_ROOT"
+echo "[INFO] Ghidra version: $GHIDRA_VERSION"
+echo "[INFO] Java runtime: $JAVA_VERSION_LINE"
+
 if [[ "$FLATPAK_MODE" == true ]]; then
     # The Flatpak launch.sh wrapper can fail outside the sandbox. Derive the
     # bundled JDK from the detected installation instead of hard-coding a host.
