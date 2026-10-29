@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Regression tests for mapping the JSON report contract into SQLite history."""
 
+import contextlib
+import io
 import json
 import os
 import sqlite3
@@ -76,6 +78,55 @@ class HistoryIndexerFieldTests(unittest.TestCase):
             ("current-sample.bin",),
         ).fetchall()
         self.assertEqual(indicator_rows, [("execution", "Synthetic test indicator", "T1059", 12)])
+
+    def test_search_scope_matches_documented_indexed_fields(self):
+        self.index_value({
+            "file": "search-scope-sample.bin",
+            "generated": "2026-10-29T15:00:00-05:00",
+            "hashes": {"md5": "md5-scope", "sha256": "sha-scope"},
+            "threat_summary": {
+                "risk_score": 72,
+                "risk_level": "HIGH",
+                "indicators": [{
+                    "category": "execution",
+                    "description": "Synthetic indicator searchable by description",
+                    "mitre_id": "T1059",
+                    "weight": 12,
+                }],
+            },
+            "suspicious_apis": [{
+                "library": "KERNEL32.dll",
+                "function": "CreateRemoteThread",
+                "mitre": "T1055",
+                "category": "Process Injection",
+            }],
+            "iocs": [{
+                "type": "url",
+                "value": "https://example.invalid/history-search",
+                "address": "0x401000",
+            }],
+            "deobfuscated_strings": [{"value": "not-indexed-recovered-string"}],
+            "top_functions": [{"name": "not-indexed-function-symbol"}],
+        })
+
+        def query(term):
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                index_report.search_db(term)
+            return output.getvalue()
+
+        self.assertIn("Suspicious API: KERNEL32.dll!CreateRemoteThread", query("CreateRemoteThread"))
+        self.assertIn("IOC [url]: https://example.invalid/history-search", query("history-search"))
+        self.assertIn("Threat Flag: Synthetic indicator searchable by description", query("Synthetic indicator"))
+        self.assertIn("Metadata match", query("sha-scope"))
+        self.assertIn(
+            "No matching records found",
+            query("not-indexed-recovered-string"),
+        )
+        self.assertIn(
+            "No matching records found",
+            query("not-indexed-function-symbol"),
+        )
 
     def test_legacy_timestamp_ioc_findings_and_mitre_keys_remain_supported(self):
         connection = self.index_value({

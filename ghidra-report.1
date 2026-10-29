@@ -58,7 +58,7 @@ Semantic differential analysis comparing memory layouts, entropy shifts, and API
 Launch the built-in dark-mode web dashboard on localhost (default: 8080).
 .TP
 .BI \-\s-1\-\s0search " <TERM>"
-Search the SQLite historical analysis database for strings, symbols, or MITRE ATT&CK indicators.
+Search the SQLite report index using case-insensitive LIKE matching over report filenames and hashes, suspicious APIs, IOCs, and threat indicators. Extracted strings and symbols are not currently indexed; a repeated filename replaces its earlier index row. This is not an FTS5 index.
 .SH OUTPUT ARTIFACTS
 Each analyzed binary receives dedicated outputs in \fBoutput/<binary_name>/\fR:
 .IP \(bu 2
