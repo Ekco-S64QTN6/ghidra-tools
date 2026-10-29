@@ -42,6 +42,8 @@ if [ -z "$GHIDRA_ROOT" ] || [ ! -d "$GHIDRA_ROOT" ]; then
         fi
     done
 fi
+# Pass the same detected installation to the child launcher.
+export GHIDRA_ROOT
 HEADLESS="$SCRIPT_DIR/run-headless.sh"
 
 # Colors
