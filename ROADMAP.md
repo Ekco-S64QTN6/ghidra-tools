@@ -238,6 +238,8 @@ These findings come from source inspection, not a successful execution of the pr
 - One failed input makes the batch exit non-zero while the remaining files still receive a clear status.
 - Repeated runs produce complete artifacts, never partially written `report_latest.*` files.
 
+**Incremental progress — 2026-10-29:** Batch execution now uses a shared, tested worker scheduler that waits for every child exactly once, records per-item success/failure counts, attempts remaining items after a failure, rejects non-positive worker counts, and returns nonzero when any item fails. A synthetic shell regression covers mixed results, all-success results, and invalid worker counts. Collision-resistant project identity, atomic output publication, timeouts/cancellation, and retry policy remain open.
+
 ---
 
 ## P1 — Packaging, deployment, and documentation consistency

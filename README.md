@@ -401,6 +401,7 @@ These are the deterministic checks run by the default GitHub Actions workflow:
 python3 -m compileall -q scripts tests
 ./ghidra-report.sh --help >/dev/null
 bash tests/test_run_headless.sh
+bash tests/test_batch_runner.sh
 python3 tests/test_dashboard_security.py
 python3 tests/test_firmware_carver.py
 python3 tests/test_trace_correlator.py

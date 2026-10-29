@@ -27,6 +27,7 @@ INGRESS_DIR="$SCRIPT_DIR/ingress"
 OUTPUT_DIR="$SCRIPT_DIR/output"
 PROJECTS_DIR="$SCRIPT_DIR/projects"
 SCRIPTS_DIR="$SCRIPT_DIR/scripts"
+source "$SCRIPTS_DIR/batch_runner.sh"
 
 # Ghidra Flatpak and system paths
 GHIDRA_ROOT="${GHIDRA_ROOT:-}"
@@ -448,7 +449,7 @@ process_binary() {
     generate_report "$project_name" "$binary_name"
 }
 
-# Batch process all files in ingress/ with optional parallel worker dispatch
+# Batch process all supported files in ingress/. Any failed item makes the overall command fail.
 batch_process() {
     log_step "Scanning ingress directory for binaries..."
     local files=()
@@ -465,38 +466,34 @@ batch_process() {
     if [ "$total" -eq 0 ]; then
         log_warn "No supported binaries found in $INGRESS_DIR"
         log_info "Supported extensions: .bin .sfc .smc .exe .dll .sys .elf .so .o .rom .fig"
-        return
+        return 0
     fi
 
     local jobs="${PARALLEL_JOBS:-1}"
-    if [ "$jobs" -gt 1 ]; then
-        log_step "Dispatching $total file(s) across ${BOLD}$jobs parallel workers${NC}..."
-        local running=0
-        local pids=()
-        for file in "${files[@]}"; do
-            (
-                process_binary "$file" "false"
-            ) &
-            pids+=($!)
-            running=$((running + 1))
-            if [ "$running" -ge "$jobs" ]; then
-                wait -n 2>/dev/null || wait "${pids[0]}" 2>/dev/null || true
-                running=$((running - 1))
-            fi
-        done
-        wait
-    else
-        local count=0
-        for file in "${files[@]}"; do
-            count=$((count + 1))
-            echo ""
-            echo -e "  ${BOLD}━━━ File $count of $total: $(basename "$file") ━━━${NC}"
-            process_binary "$file" "false" || log_error "Failed processing: $(basename "$file")"
-        done
+    if [[ ! "$jobs" =~ ^[1-9][0-9]*$ ]]; then
+        log_error "Parallel worker count must be a positive integer, got: $jobs"
+        return 2
+    fi
+    if [ "$jobs" -gt "$total" ]; then
+        jobs="$total"
     fi
 
-    echo ""
-    log_success "Batch processing complete: $total file(s) analyzed."
+    if [ "$jobs" -gt 1 ]; then
+        log_step "Dispatching $total file(s) across ${BOLD}$jobs parallel workers${NC}..."
+    else
+        log_step "Processing $total file(s) serially..."
+    fi
+
+    if run_batch_workers "$jobs" process_binary "${files[@]}"; then
+        echo ""
+        log_success "Batch processing complete: ${BATCH_SUCCESS_COUNT}/${BATCH_TOTAL_COUNT} succeeded, 0 failed."
+        return 0
+    else
+        local batch_status=$?
+        echo ""
+        log_error "Batch processing finished: ${BATCH_SUCCESS_COUNT}/${BATCH_TOTAL_COUNT} succeeded, ${BATCH_FAILURE_COUNT} failed."
+        return "$batch_status"
+    fi
 }
 
 # Compare two reports (JSON format) with standardized semantic findings lifecycle
