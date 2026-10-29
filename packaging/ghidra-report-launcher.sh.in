@@ -10,5 +10,8 @@ fi
 
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 export GHIDRA_REPORT_DATA_DIR="${GHIDRA_REPORT_DATA_DIR:-$DATA_HOME/ghidra-report}"
+if [[ -d "$APP_ROOT/vendor" ]]; then
+    export PYTHONPATH="$APP_ROOT/vendor${PYTHONPATH:+:$PYTHONPATH}"
+fi
 
 exec "$APP_ROOT/ghidra-report.sh" "$@"
