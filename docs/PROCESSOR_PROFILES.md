@@ -33,8 +33,8 @@ All community and bundled extensions reside in the Ghidra Flatpak Extensions dir
 | `EM_X86_64` | ELF64 little-endian | `x86:LE:64:default` |
 | `EM_ARM` | ELF32 little- or big-endian | `ARM:LE:32:v8` / `ARM:BE:32:v8` |
 | `EM_AARCH64` | ELF64 little- or big-endian | `AARCH64:LE:64:v8A` / `AARCH64:BE:64:v8A` |
-| `EM_MIPS` | ELF32/ELF64, either byte order | `MIPS:{LE,BE}:{32,64}:default` |
-| `EM_RISCV` | ELF32/ELF64 little-endian | `RISCV:LE:32:RV32GC` / `RISCV:LE:64:RV64GC` |
+| `EM_MIPS` | ELF32, either byte order | `MIPS:LE:32:default` / `MIPS:BE:32:default`; ELF64 is deliberately deferred until ABI/ISA flags can disambiguate the decoder |
+| `EM_RISCV` | ELF32/ELF64 little-endian | `RISCV:LE:32:default` / `RISCV:LE:64:default` |
 | `EM_PPC` | ELF32, either byte order | `PowerPC:{LE,BE}:32:default` |
 | `EM_PPC64` | ELF64, either byte order | `PowerPC:{LE,BE}:64:default` |
 
