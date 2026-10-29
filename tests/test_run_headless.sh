@@ -23,6 +23,10 @@ make_mock_java() {
 #!/usr/bin/env bash
 printf 'JAVA_HOME=%s\n' "${JAVA_HOME:-}" > "$CALL_LOG"
 printf 'ARG=%s\n' "$@" >> "$CALL_LOG"
+if [[ "${1:-}" == "-version" ]]; then
+    echo 'openjdk version "25.0.1"' >&2
+    exit 0
+fi
 MOCK
     chmod +x "$path"
 }
@@ -30,7 +34,8 @@ MOCK
 # Standard Ghidra roots must use support/analyzeHeadless and preserve arguments.
 STANDARD_ROOT="$TMP_DIR/standard-ghidra"
 JAVA_ROOT="$TMP_DIR/jdk"
-mkdir -p "$STANDARD_ROOT/support" "$JAVA_ROOT/bin"
+mkdir -p "$STANDARD_ROOT/support" "$STANDARD_ROOT/Ghidra" "$JAVA_ROOT/bin"
+printf 'application.version=12.2\n' > "$STANDARD_ROOT/Ghidra/application.properties"
 make_mock_java "$JAVA_ROOT/bin/java"
 cat > "$STANDARD_ROOT/support/analyzeHeadless" <<'MOCK'
 #!/usr/bin/env bash
@@ -40,12 +45,15 @@ MOCK
 chmod +x "$STANDARD_ROOT/support/analyzeHeadless"
 
 CALL_LOG="$TMP_DIR/standard.log" GHIDRA_ROOT="$STANDARD_ROOT" JAVA_HOME="$JAVA_ROOT" \
-    bash "$SCRIPT_DIR/run-headless.sh" --projectName "project with spaces" -import sample.bin
+    bash "$SCRIPT_DIR/run-headless.sh" --projectName "project with spaces" -import sample.bin > "$TMP_DIR/standard.out"
 grep -Fqx "JAVA_HOME=$JAVA_ROOT" "$TMP_DIR/standard.log" || fail "JAVA_HOME was not preserved for standard installs"
 grep -Fqx "ARG=--projectName" "$TMP_DIR/standard.log" || fail "standard launcher did not receive the first argument"
 grep -Fqx "ARG=project with spaces" "$TMP_DIR/standard.log" || fail "standard launcher did not preserve spaced arguments"
 grep -Fqx "ARG=sample.bin" "$TMP_DIR/standard.log" || fail "standard launcher did not receive the final argument"
-pass "standard install honors GHIDRA_ROOT/JAVA_HOME and preserves arguments"
+grep -Fq "[INFO] Ghidra version: 12.2" "$TMP_DIR/standard.out" || fail "Ghidra version diagnostic missing"
+grep -Fq 'openjdk version "25.0.1"' "$TMP_DIR/standard.out" || fail "Java runtime diagnostic missing"
+grep -Fq "[INFO] Ghidra root: $STANDARD_ROOT" "$TMP_DIR/standard.out" || fail "Ghidra root diagnostic missing"
+pass "standard install honors GHIDRA_ROOT/JAVA_HOME, preserves arguments, and reports runtime versions"
 
 # Flatpak roots must retain the direct-JVM workaround, deriving the bundled JDK.
 FLATPAK_FILES="$TMP_DIR/flatpak/files"
