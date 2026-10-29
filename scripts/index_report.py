@@ -6,9 +6,64 @@ import sqlite3
 
 DEFAULT_OUTPUT_DIR = os.environ.get("GHIDRA_REPORT_OUTPUT_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "output"))
 DB_PATH = os.path.abspath(os.environ.get("GHIDRA_REPORT_DB_PATH", os.path.join(DEFAULT_OUTPUT_DIR, "reports.db")))
+MAX_SEARCH_TEXT_CHARS = 1_000_000
+FTS_MIGRATION_NAME = "reports_fts5_search_text_v1"
+SEARCHABLE_REPORT_FIELDS = (
+    "deobfuscated_strings", "strings", "defined_strings", "recovered_strings",
+    "stack_strings", "top_functions", "functions", "symbols", "exports",
+    "rules", "capabilities", "findings", "shellcode_findings",
+)
 
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
+
+def _iter_text_values(value, depth=0):
+    """Yield bounded-depth string representations from selected JSON subtrees."""
+    if depth > 12 or value is None:
+        return
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if isinstance(key, str):
+                yield key
+            yield from _iter_text_values(child, depth + 1)
+    elif isinstance(value, (list, tuple)):
+        for child in value:
+            yield from _iter_text_values(child, depth + 1)
+    elif isinstance(value, (str, int, float)) and not isinstance(value, bool):
+        text = str(value).strip()
+        if text:
+            yield text
+
+
+def search_text_from_report(data):
+    """Flatten strings, recovered values, symbols, functions, and rule findings for FTS."""
+    parts = []
+    total_chars = 0
+    for field in SEARCHABLE_REPORT_FIELDS:
+        if field not in data:
+            continue
+        for token in _iter_text_values(data[field]):
+            separator = 1 if parts else 0
+            remaining = MAX_SEARCH_TEXT_CHARS - total_chars - separator
+            if remaining <= 0:
+                return " ".join(parts)
+            token = token[:remaining]
+            if token:
+                parts.append(token)
+                total_chars += separator + len(token)
+            if total_chars >= MAX_SEARCH_TEXT_CHARS:
+                return " ".join(parts)
+    return " ".join(parts)
+
+
+def fts_phrase_query(query):
+    """Quote user text as an FTS5 phrase so punctuation cannot change query syntax."""
+    value = str(query or "").strip()
+    if not value:
+        return ""
+    return '"' + value.replace('"', '""') + '"'
+
+
+def get_db(db_path=None):
+    conn = sqlite3.connect(db_path or DB_PATH)
     cur = conn.cursor()
     cur.execute("""
         CREATE TABLE IF NOT EXISTS reports (
@@ -22,7 +77,8 @@ def get_db():
             sha256 TEXT,
             imphash TEXT,
             function_count INTEGER,
-            json_path TEXT
+            json_path TEXT,
+            search_text TEXT NOT NULL DEFAULT ''
         )
     """)
     cur.execute("""
@@ -58,6 +114,7 @@ def get_db():
         )
     """)
     _migrate_report_identity(conn)
+    _ensure_fts_search(conn)
     conn.commit()
     return conn
 
