@@ -298,13 +298,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           </td>
           <td>
             <div class="actions">
-              <a class="btn btn-primary" href="/output/${encodeURIComponent(r.file)}/report_latest.html" target="_blank" rel="noopener noreferrer">HTML</a>
-              <a class="btn" href="/output/${encodeURIComponent(r.file)}/report_latest.txt" target="_blank" rel="noopener noreferrer">TXT</a>
-              <a class="btn" href="/output/${encodeURIComponent(r.file)}/report_latest.json" target="_blank" rel="noopener noreferrer">JSON</a>
-              <a class="btn" href="/output/${encodeURIComponent(r.file)}/report_latest.md" target="_blank" rel="noopener noreferrer">MD</a>
-              <a class="btn" href="/output/${encodeURIComponent(r.file)}/report_latest.sarif" target="_blank" rel="noopener noreferrer">SARIF</a>
-              <a class="btn" href="/output/${encodeURIComponent(r.file)}/report_latest.yar" target="_blank" rel="noopener noreferrer">YARA</a>
-              <a class="btn" href="/output/${encodeURIComponent(r.file)}/report_latest.misp.json" target="_blank" rel="noopener noreferrer">MISP</a>
+              <a class="btn btn-primary" href="/output/${encodeURIComponent(r.output_key || r.file)}/report_latest.html" target="_blank" rel="noopener noreferrer">HTML</a>
+              <a class="btn" href="/output/${encodeURIComponent(r.output_key || r.file)}/report_latest.txt" target="_blank" rel="noopener noreferrer">TXT</a>
+              <a class="btn" href="/output/${encodeURIComponent(r.output_key || r.file)}/report_latest.json" target="_blank" rel="noopener noreferrer">JSON</a>
+              <a class="btn" href="/output/${encodeURIComponent(r.output_key || r.file)}/report_latest.md" target="_blank" rel="noopener noreferrer">MD</a>
+              <a class="btn" href="/output/${encodeURIComponent(r.output_key || r.file)}/report_latest.sarif" target="_blank" rel="noopener noreferrer">SARIF</a>
+              <a class="btn" href="/output/${encodeURIComponent(r.output_key || r.file)}/report_latest.yar" target="_blank" rel="noopener noreferrer">YARA</a>
+              <a class="btn" href="/output/${encodeURIComponent(r.output_key || r.file)}/report_latest.misp.json" target="_blank" rel="noopener noreferrer">MISP</a>
             </div>
           </td>
         </tr>
@@ -450,7 +450,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             conn = sqlite3.connect(DB_PATH)
             cur = conn.cursor()
             cur.execute("""
-                SELECT file, timestamp, format_label, risk_score, risk_level, md5, sha256, imphash, function_count
+                SELECT file, timestamp, format_label, risk_score, risk_level, md5, sha256, imphash, function_count, json_path
                 FROM reports ORDER BY id DESC LIMIT ?
             """, (MAX_REPORTS_RESPONSE,))
             rows = cur.fetchall()
@@ -465,7 +465,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     "md5": r[5],
                     "sha256": r[6],
                     "imphash": r[7],
-                    "function_count": r[8]
+                    "function_count": r[8],
+                    "output_key": (
+                        os.path.basename(os.path.dirname(os.path.abspath(r[9])))
+                        if r[9] else r[0]
+                    ),
                 })
             conn.close()
             self.send_json(reports)
@@ -537,6 +541,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
             for ind in ind_hits:
                 files.setdefault(ind[0], {"score": ind[1], "level": ind[2], "matches": []})
                 files[ind[0]]["matches"].append(f"Threat Flag: {ind[4]}")
+
+            cur.execute("SELECT file, json_path FROM reports")
+            output_keys = {
+                row[0]: os.path.basename(os.path.dirname(os.path.abspath(row[1]))) if row[1] else row[0]
+                for row in cur.fetchall()
+            }
+            for filename, info in files.items():
+                info["output_key"] = output_keys.get(filename, filename)
 
             conn.close()
             self.send_json(files)
