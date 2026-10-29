@@ -72,9 +72,8 @@ class ArchitectureDetectorTests(unittest.TestCase):
             (2, 1, 183, "AARCH64:LE:64:v8A"),
             (1, 2, 8, "MIPS:BE:32:default"),
             (1, 1, 8, "MIPS:LE:32:default"),
-            (2, 2, 8, "MIPS:BE:64:default"),
-            (1, 1, 243, "RISCV:LE:32:RV32GC"),
-            (2, 1, 243, "RISCV:LE:64:RV64GC"),
+            (1, 1, 243, "RISCV:LE:32:default"),
+            (2, 1, 243, "RISCV:LE:64:default"),
             (1, 2, 20, "PowerPC:BE:32:default"),
             (1, 1, 20, "PowerPC:LE:32:default"),
             (2, 2, 21, "PowerPC:BE:64:default"),
@@ -94,6 +93,16 @@ class ArchitectureDetectorTests(unittest.TestCase):
             self.assertEqual(result["format"], "elf")
             self.assertIsNone(result["processor"])
             self.assertIn("defer language selection", result["evidence"])
+
+    def test_mips64_is_not_forced_to_the_ambiguous_default_language(self):
+        with tempfile.TemporaryDirectory() as temp:
+            for encoding in (1, 2):
+                with self.subTest(encoding=encoding):
+                    path = write_fixture(temp, "mips64.elf", make_elf(2, encoding, 8))
+                    result = detector.inspect_file(path)
+                    self.assertEqual(result["format"], "elf")
+                    self.assertIsNone(result["processor"])
+                    self.assertIn("defer language selection", result["evidence"])
 
     def test_truncated_or_malformed_elf_never_selects_a_processor(self):
         with tempfile.TemporaryDirectory() as temp:
