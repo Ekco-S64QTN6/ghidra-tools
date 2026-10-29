@@ -39,7 +39,9 @@ RUN_FINDCRYPT=false
 BOLD='' NC=''
 mkdir -p "$PROJECTS_DIR"
 : > "$TMP_DIR/calls"
+: > "$TMP_DIR/args"
 CALL_LOG="$TMP_DIR/calls"
+ARG_LOG="$TMP_DIR/args"
 
 detect_file_type() { printf 'snes\n'; }
 
@@ -48,7 +50,7 @@ run_headless_logged() {
     local mode="$2"
     shift 2
     printf '%s\n' "$mode" >> "$CALL_LOG"
-    printf '%s\n' "$@" >> "$CALL_LOG"
+    printf '%s\n' "$@" >> "$ARG_LOG"
     case "$mode" in
         import)
             if [[ "${MOCK_IMPORT_LOG_MODE:-generic}" == diagnostic ]]; then
@@ -79,14 +81,15 @@ fi
 [[ "$status" -eq 0 ]] || fail "generic SNES loader failure did not recover (status $status)"
 [[ "$(sed -n '1p' "$CALL_LOG")" == import ]] || fail "first headless call was not the extension loader"
 [[ "$(sed -n '2p' "$CALL_LOG")" == fallback ]] || fail "failed SNES loader without diagnostic did not trigger raw fallback"
-grep -Fq -- "-processor" "$CALL_LOG" || fail "raw fallback did not pass an explicit processor"
-grep -Fq "65816:LE:24:snes" "$CALL_LOG" || fail "raw fallback used the wrong processor"
+grep -Fq -- "-processor" "$ARG_LOG" || fail "raw fallback did not pass an explicit processor"
+grep -Fq "65816:LE:24:snes" "$ARG_LOG" || fail "raw fallback used the wrong processor"
 grep -Fq "Falling back to raw import with 65816 processor" "$TMP_DIR/generic.log" || fail "fallback diagnostic was not shown"
 pass "nonzero loader failure falls back even without a recognized diagnostic"
 
 # Preserve support for Ghidra builds that report a loader rejection in text but
 # return a zero exit code.
 : > "$CALL_LOG"
+: > "$ARG_LOG"
 if MOCK_IMPORT_STATUS=0 MOCK_IMPORT_LOG_MODE=diagnostic MOCK_FALLBACK_STATUS=0 \
     import_and_analyze "$SNES_FIXTURE" "snes-text-fallback" >"$TMP_DIR/diagnostic.log" 2>&1; then
     status=0
