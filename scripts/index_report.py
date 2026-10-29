@@ -71,7 +71,8 @@ def index_report(json_path):
     cur = conn.cursor()
 
     filename = data.get("file", os.path.basename(json_path))
-    timestamp = data.get("timestamp", "")
+    # Current JSON reports use "generated"; accept "timestamp" for older reports.
+    timestamp = data.get("generated") or data.get("timestamp", "")
     format_label = data.get("format_label", "")
     hashes = data.get("hashes", {})
     threat = data.get("threat_summary", {})
@@ -118,19 +119,39 @@ def index_report(json_path):
             VALUES (?, ?, ?, ?, ?)
         """, (report_id, api.get("library", ""), api.get("function", ""), api.get("mitre", ""), api.get("category", "")))
 
+    # Current JSON reports use "iocs"; accept "ioc_findings" for older reports.
+    ioc_rows = data.get("iocs")
+    if not isinstance(ioc_rows, list):
+        ioc_rows = data.get("ioc_findings", [])
+    if not isinstance(ioc_rows, list):
+        ioc_rows = []
+
     # Insert IOCs
-    for ioc in data.get("ioc_findings", []):
+    for ioc in ioc_rows:
+        if not isinstance(ioc, dict):
+            continue
         cur.execute("""
             INSERT INTO iocs (report_id, type, value, address)
             VALUES (?, ?, ?, ?)
         """, (report_id, ioc.get("type", ""), ioc.get("value", ""), ioc.get("address", "")))
 
-    # Insert Indicators
-    for ind in threat.get("indicators", []):
+    # The current JSON contract names this field "mitre_id"; keep accepting "mitre".
+    indicator_rows = threat.get("indicators", [])
+    if not isinstance(indicator_rows, list):
+        indicator_rows = []
+    for ind in indicator_rows:
+        if not isinstance(ind, dict):
+            continue
         cur.execute("""
             INSERT INTO indicators (report_id, category, description, mitre, weight)
             VALUES (?, ?, ?, ?, ?)
-        """, (report_id, ind.get("category", ""), ind.get("description", ""), ind.get("mitre", ""), ind.get("weight", 0)))
+        """, (
+            report_id,
+            ind.get("category", ""),
+            ind.get("description", ""),
+            ind.get("mitre_id") or ind.get("mitre", ""),
+            ind.get("weight", 0),
+        ))
 
     conn.commit()
     conn.close()
