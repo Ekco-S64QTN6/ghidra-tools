@@ -7,8 +7,8 @@ A headless Ghidra pipeline that turns an unknown executable, ROM or firmware ima
 into a scored triage report — in seven formats, with no GUI and no reverse-engineering
 experience required.
 
-[![Ghidra](https://img.shields.io/badge/Ghidra-12.x_headless-e74c3c?style=flat-square)](https://ghidra-sre.org/)
-[![Java](https://img.shields.io/badge/scripts-Java_21-f89820?style=flat-square&logo=openjdk&logoColor=white)](#architecture)
+[![Ghidra](https://img.shields.io/badge/Ghidra-12.2_headless-e74c3c?style=flat-square)](https://ghidra-sre.org/)
+[![Java](https://img.shields.io/badge/scripts-Java_25-f89820?style=flat-square&logo=openjdk&logoColor=white)](#architecture)
 [![Bash](https://img.shields.io/badge/CLI-bash_4%2B-4eaa25?style=flat-square&logo=gnubash&logoColor=white)](#cli-reference)
 [![Python](https://img.shields.io/badge/pipelines-python_stdlib_%2B_PyYAML_for_rules-3776ab?style=flat-square&logo=python&logoColor=white)](#side-pipelines)
 [![Formats](https://img.shields.io/badge/output-7_formats-6fc3df?style=flat-square)](#what-a-report-contains)
@@ -72,9 +72,13 @@ Or point it straight at one file:
 ./ghidra-report.sh /path/to/firmware.bin --format all
 ```
 
-The only hard requirement is a Ghidra 12.x install. The Flatpak
-(`org.ghidra_sre.Ghidra`), `/opt/ghidra` and `/usr/share/ghidra` are all found
-automatically; anything else, set `GHIDRA_ROOT`.
+The default container is pinned to Ghidra 12.2 with JDK 25, and verifies the
+official release archive against its published SHA-256 before installation.
+[Ghidra 12.2 requires at least JDK 25](https://github.com/NationalSecurityAgency/ghidra/releases/tag/Ghidra_12.2_build).
+For a host or Flatpak install, use the JDK required by that specific Ghidra release.
+The launcher prints the detected Ghidra root/version and Java runtime to aid diagnosis.
+The Flatpak (`org.ghidra_sre.Ghidra`), `/opt/ghidra` and `/usr/share/ghidra` are
+all found automatically; for another location, set `GHIDRA_ROOT`.
 
 ---
 
