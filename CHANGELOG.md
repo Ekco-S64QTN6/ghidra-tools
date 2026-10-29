@@ -20,5 +20,6 @@ All notable changes to this project are documented here.
 - Use the status-preserving headless log helper for loader imports and SNES fallback, and add regression coverage for nonzero analyzer exit statuses.
 - Preserve Ghidra report-export exit statuses through log filtering, clean partial failed-export artifacts without replacing prior latest symlinks, and support HTML-only successful output.
 - Serialize import, analysis, report export, and `report_latest.*` updates across concurrent runs of the same output identity with cross-process advisory locks; different identities remain concurrent, with a configurable fail-closed wait timeout and regression tests.
+- Write report exports in a private staging directory, discard staged files on exporter failure, and atomically replace each `report_latest.*` symlink only after successful export; document that multiple formats are not published as one transaction.
 - Derive Ghidra project names from canonical source path, sample content, and project-affecting settings so same-basename inputs or changed content do not reuse the wrong project.
 - Key report-output directories by sanitized filename, canonical path hash, and content hash; migrate history away from unique basenames and retain distinct reports by JSON path, including dashboard search links for each output identity.
