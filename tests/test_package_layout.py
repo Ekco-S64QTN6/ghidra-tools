@@ -26,6 +26,7 @@ def test_launcher():
         root = Path(temp)
         app_root = root / "prefix" / "libexec" / "ghidra report"
         app_root.mkdir(parents=True)
+        (app_root / "vendor").mkdir()
         fake_cli = app_root / "ghidra-report.sh"
         fake_cli.write_text(
             '#!/usr/bin/env bash\n'
@@ -57,7 +58,8 @@ def test_launcher():
         )
         lines = capture.read_text(encoding="utf-8").splitlines()
         require(lines[0] == str(xdg / "ghidra-report"), "launcher should default to XDG user data")
-        require(lines[1:] == ["ARG:--detect-type", "ARG:file name with spaces.bin"],
+        require(str(app_root / "vendor") in lines[1], "launcher should expose the private Python dependency directory")
+        require(lines[2:] == ["ARG:--detect-type", "ARG:file name with spaces.bin"],
                 "launcher must preserve arguments, including embedded spaces")
 
         custom_data = root / "custom ghidra data"
