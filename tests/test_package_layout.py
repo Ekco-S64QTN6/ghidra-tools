@@ -104,8 +104,8 @@ def test_source_and_package_layouts():
             "Homebrew must pin the YAML parser as a source resource")
     require('sha256 "d76623373421df22fb4cf8817020cbb7ef15c725b9d5e45f17e189bfc384190f"' in formula,
             "Homebrew must verify the pinned PyYAML source digest")
-    require('"-target", libexec/"vendor"' in formula,
-            "Homebrew must keep Python dependencies private to the app root")
+    require('cp_r "lib/yaml", libexec/"vendor"' in formula,
+            "Homebrew must vendor the pinned pure-Python YAML package under the app root")
     require('APP_ROOT/vendor' in read("packaging/ghidra-report-launcher.sh.in"),
             "the package launcher must add vendored Python dependencies to PYTHONPATH")
     require('pkgshare.install "scripts", "rules", "run-headless.sh"' not in formula,
