@@ -388,6 +388,7 @@ bash tests/test_run_headless.sh
 python3 tests/test_dashboard_security.py
 python3 tests/test_firmware_carver.py
 python3 tests/test_trace_correlator.py
+python3 tests/test_history_indexer.py
 ```
 
 The launcher regression test mocks the Ghidra commands and checks standard and
@@ -396,6 +397,7 @@ local HTTP server and cover path traversal, symlink escapes, escaped HTML values
 security headers/CSP, loopback binding, and bounded responses.
 The trace-correlation tests exercise list-shaped generic traces, CAPE process events,
 case-insensitive API matching, malformed event entries, and process-isolated attack chains.
+The history-indexer tests verify that the current report fields (`generated`, `iocs`, and indicator `mitre_id`) remain searchable in SQLite, while older field names continue to work.
 
 ### Full Ghidra-backed integration suite
 
