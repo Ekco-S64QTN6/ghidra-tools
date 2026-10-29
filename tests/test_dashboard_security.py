@@ -183,7 +183,7 @@ class DashboardSecurityTests(unittest.TestCase):
         page = body.decode("utf-8")
         self.assertIn("function escapeHtml(value)", page)
         self.assertIn("$" + "{escapeHtml(r.file)}", page)
-        self.assertIn("encodeURIComponent(r.file)", page)
+        self.assertIn("encodeURIComponent(r.output_key || r.file)", page)
         self.assertIn("$" + "{escapeHtml(m)}", page)
         self.assertNotIn("$" + "{r.file}", page)
 
