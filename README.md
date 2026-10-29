@@ -381,7 +381,10 @@ The headless launcher also has a standalone mocked regression test that needs no
 
 ```bash
 bash tests/test_run_headless.sh
+python3 tests/test_dashboard_security.py
 ```
+
+The dashboard security regression test uses only Python's standard library; it checks traversal and symlink escapes, response limits, safe headers, XSS escaping, and loopback binding. It also exercises the HTML escaping helper with Node.js when available.
 
 The suite is self-contained: `tests/make_fixtures.py` synthesizes its own samples,
 so a fresh clone runs the whole thing. Nothing is read from `ingress/` — that is a
