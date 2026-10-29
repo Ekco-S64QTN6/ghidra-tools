@@ -5,6 +5,7 @@ Repository-specific guidance for contributors and coding agents.
 ## Runtime and compatibility
 
 - `VERSION` is the canonical app release version for the CLI banner, SARIF driver metadata, and local release archive naming. `tests/test_version_consistency.py` guards duplicate version references in docs, formulas, and CI.
+- Package formulas should keep `ghidra-report.sh`, `run-headless.sh`, `VERSION`, `scripts/`, `rules/`, and `schemas/` together under a private app root. Their generated wrapper must route writable ingress/projects/reports/history to `GHIDRA_REPORT_DATA_DIR` (defaulting to XDG user storage); never write generated data into the read-only application tree.
 - Homebrew/AUR definitions are not release-ready while their SHA-256 fields say `SKIP`; never invent a digest. Only replace those placeholders after a real tag/release asset exists and the clean package install path has been tested.
 
 - The default container target is **Ghidra 12.2 + JDK 25**. Ghidra 12.2 requires at least JDK 25. The Docker build must verify the official release archive SHA-256 before extraction; do not update the version/date without refreshing the checksum from the upstream release and getting the container CI smoke test to pass.

@@ -4,7 +4,8 @@ import os
 import json
 import sqlite3
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "output", "reports.db")
+DEFAULT_OUTPUT_DIR = os.environ.get("GHIDRA_REPORT_OUTPUT_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "output"))
+DB_PATH = os.path.abspath(os.environ.get("GHIDRA_REPORT_DB_PATH", os.path.join(DEFAULT_OUTPUT_DIR, "reports.db")))
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)

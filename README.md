@@ -387,8 +387,10 @@ APP_VERSION="$(cat VERSION)"
 ./scripts/package_release.sh          # dist/ghidra-report-v${APP_VERSION}-linux-x86_64.tar.gz + .sha256
 ```
 
-Homebrew formula and AUR `PKGBUILD` live in `packaging/`. A man page is at
+Homebrew formula and AUR `PKGBUILD` live in `packaging/`; both use a launcher wrapper so read-only runtime assets remain co-located and writable data stays in the user's data directory. A man page is at
 `ghidra-report.1`.
+
+For Homebrew/AUR installs, runtime assets stay together under the package's private app root, while writable inputs, projects, reports, and history default to `${XDG_DATA_HOME:-$HOME/.local/share}/ghidra-report`. Set `GHIDRA_REPORT_DATA_DIR` to choose another data root, or override `GHIDRA_REPORT_INGRESS_DIR`, `GHIDRA_REPORT_OUTPUT_DIR`, `GHIDRA_REPORT_PROJECTS_DIR`, and `GHIDRA_REPORT_DB_PATH` individually. A source checkout continues to default its writable directories beside `ghidra-report.sh`.
 
 **Release status:** `VERSION` is the canonical app version source. The Homebrew/AUR metadata is aligned to this repository and version, but release tags/assets have not been published and their source checksums remain explicit placeholders. Do not submit or install those package definitions as a release until a tagged release archive exists, its checksum is verified, and clean-install tests pass.
 
@@ -414,6 +416,7 @@ python3 -m compileall -q scripts tests
 python3 tests/test_report_schema.py
 python3 tests/test_report_format.py
 python3 tests/test_version_consistency.py
+python3 tests/test_package_layout.py
 python3 tests/test_architecture_detector.py
 python3 tests/test_project_identity.py
 ./ghidra-report.sh --help >/dev/null

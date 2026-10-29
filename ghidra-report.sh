@@ -33,9 +33,14 @@ if [[ -n "$APP_VERSION" && ! "$APP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 fi
 APP_VERSION="${APP_VERSION:-unknown}"
 export GHIDRA_REPORT_VERSION="$APP_VERSION"
-INGRESS_DIR="$SCRIPT_DIR/ingress"
-OUTPUT_DIR="$SCRIPT_DIR/output"
-PROJECTS_DIR="$SCRIPT_DIR/projects"
+# Keep source assets beside the CLI, but allow packages to place writable data
+# in a user-owned directory rather than under the read-only install prefix.
+DATA_ROOT="${GHIDRA_REPORT_DATA_DIR:-$SCRIPT_DIR}"
+INGRESS_DIR="${GHIDRA_REPORT_INGRESS_DIR:-$DATA_ROOT/ingress}"
+OUTPUT_DIR="${GHIDRA_REPORT_OUTPUT_DIR:-$DATA_ROOT/output}"
+PROJECTS_DIR="${GHIDRA_REPORT_PROJECTS_DIR:-$DATA_ROOT/projects}"
+export GHIDRA_REPORT_OUTPUT_DIR="$OUTPUT_DIR"
+export GHIDRA_REPORT_DB_PATH="${GHIDRA_REPORT_DB_PATH:-$OUTPUT_DIR/reports.db}"
 SCRIPTS_DIR="$SCRIPT_DIR/scripts"
 source "$SCRIPTS_DIR/batch_runner.sh"
 source "$SCRIPTS_DIR/headless_log.sh"
@@ -102,7 +107,7 @@ log_step()    { echo -e "  ${CYAN}[STEP]${NC}  $*"; }
 
 # Ensure directories exist
 setup_dirs() {
-    mkdir -p "$INGRESS_DIR" "$OUTPUT_DIR" "$PROJECTS_DIR" "$SCRIPTS_DIR"
+    mkdir -p "$INGRESS_DIR" "$OUTPUT_DIR" "$PROJECTS_DIR"
 }
 
 # Validate prerequisites

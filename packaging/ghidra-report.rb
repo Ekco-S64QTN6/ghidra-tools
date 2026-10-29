@@ -6,14 +6,33 @@ class GhidraReport < Formula
   sha256 "SKIP"
   license "MIT"
 
+  resource "pyyaml" do
+    url "https://files.pythonhosted.org/packages/source/P/PyYAML/pyyaml-6.0.3.tar.gz"
+    sha256 "d76623373421df22fb4cf8817020cbb7ef15c725b9d5e45f17e189bfc384190f"
+  end
+
   depends_on "openjdk@25"
   depends_on "python@3.12"
   depends_on "sqlite"
 
   def install
-    bin.install "ghidra-report.sh" => "ghidra-report"
+    libexec.install "ghidra-report.sh", "run-headless.sh", "VERSION", "requirements-rules.txt"
+    libexec.install "scripts", "rules", "schemas"
+    (libexec/"vendor").mkpath
+    resource("pyyaml").stage do
+      # The YAML parser's pure-Python package is sufficient here and avoids a
+      # native-extension/toolchain dependency in an otherwise script-only formula.
+      cp_r "lib/yaml", libexec/"vendor"
+    end
+
+    launcher = File.read("packaging/ghidra-report-launcher.sh.in")
+    launcher.gsub!("@APP_ROOT@", libexec.to_s)
+    (libexec/"ghidra-report-launcher").write(launcher)
+    (libexec/"ghidra-report-launcher").chmod 0755
+    bin.write_env_script libexec/"ghidra-report-launcher",
+                         Language::Java.overridable_java_home_env("25")
+
     man1.install "ghidra-report.1"
-    pkgshare.install "scripts", "rules", "run-headless.sh"
   end
 
   test do

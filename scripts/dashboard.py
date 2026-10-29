@@ -13,8 +13,8 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, unquote
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUTPUT_DIR = os.path.join(BASE_DIR, "output")
-DB_PATH = os.path.join(OUTPUT_DIR, "reports.db")
+OUTPUT_DIR = os.path.abspath(os.environ.get("GHIDRA_REPORT_OUTPUT_DIR", os.path.join(BASE_DIR, "output")))
+DB_PATH = os.path.abspath(os.environ.get("GHIDRA_REPORT_DB_PATH", os.path.join(OUTPUT_DIR, "reports.db")))
 MAX_SEARCH_LENGTH = 256
 MAX_REPORTS_RESPONSE = 500
 MAX_SEARCH_ROWS = 100
