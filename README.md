@@ -416,6 +416,7 @@ python3 -m compileall -q scripts tests
 python3 tests/test_report_schema.py
 python3 tests/test_report_format.py
 python3 tests/test_version_consistency.py
+python3 tests/test_package_layout.py
 python3 tests/test_architecture_detector.py
 python3 tests/test_project_identity.py
 ./ghidra-report.sh --help >/dev/null
