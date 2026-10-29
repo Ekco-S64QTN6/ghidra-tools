@@ -1,0 +1,426 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/Ekco-S64QTN6/ghidra-tools/blob/main/schemas/report-v1.schema.json",
+  "title": "ghidra-report JSON report schema version 1.0.0",
+  "description": "Versioned contract for the primary JSON output emitted by JsonReportWriter. Additional properties are allowed for additive evolution.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "file",
+    "format",
+    "format_label",
+    "generated",
+    "hashes",
+    "architecture",
+    "threat_summary",
+    "memory_blocks",
+    "suspicious_apis",
+    "iocs",
+    "deobfuscated_strings",
+    "top_functions",
+    "analysis_stats"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "file": {
+      "type": "string"
+    },
+    "format": {
+      "type": "string"
+    },
+    "format_label": {
+      "type": "string"
+    },
+    "generated": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "hashes": {
+      "type": "object",
+      "required": [
+        "md5",
+        "sha256"
+      ],
+      "properties": {
+        "md5": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "architecture": {
+      "type": "object",
+      "required": [
+        "language",
+        "language_id",
+        "compiler_spec",
+        "endianness",
+        "pointer_size_bits"
+      ],
+      "properties": {
+        "language": {
+          "type": "string"
+        },
+        "language_id": {
+          "type": "string"
+        },
+        "compiler_spec": {
+          "type": "string"
+        },
+        "endianness": {
+          "enum": [
+            "big",
+            "little"
+          ]
+        },
+        "pointer_size_bits": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": true
+    },
+    "threat_summary": {
+      "type": "object",
+      "required": [
+        "risk_score",
+        "risk_level",
+        "indicators"
+      ],
+      "properties": {
+        "risk_score": {
+          "type": "number"
+        },
+        "risk_level": {
+          "type": "string"
+        },
+        "indicators": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "category",
+              "description",
+              "mitre_id",
+              "weight"
+            ],
+            "properties": {
+              "category": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "mitre_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "weight": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "memory_blocks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "start",
+          "end",
+          "size",
+          "perms",
+          "entropy",
+          "high_entropy",
+          "rwx",
+          "packer"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "start": {
+            "type": "string"
+          },
+          "end": {
+            "type": "string"
+          },
+          "size": {
+            "type": "number"
+          },
+          "perms": {
+            "type": "string"
+          },
+          "entropy": {
+            "type": "number"
+          },
+          "high_entropy": {
+            "type": "boolean"
+          },
+          "rwx": {
+            "type": "boolean"
+          },
+          "packer": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "suspicious_apis": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "function",
+          "library",
+          "mitre",
+          "category"
+        ],
+        "properties": {
+          "function": {
+            "type": "string"
+          },
+          "library": {
+            "type": "string"
+          },
+          "mitre": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "iocs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "type",
+          "value",
+          "address"
+        ],
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "deobfuscated_strings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "address",
+          "function",
+          "method",
+          "value"
+        ],
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "function": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "top_functions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "address",
+          "score",
+          "xrefs",
+          "instructions"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "score": {
+            "type": "integer"
+          },
+          "xrefs": {
+            "type": "integer"
+          },
+          "instructions": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "analysis_stats": {
+      "type": "object",
+      "required": [
+        "function_count",
+        "symbol_count",
+        "initialized_bytes",
+        "disassembled_bytes",
+        "code_coverage_pct"
+      ],
+      "properties": {
+        "function_count": {
+          "type": "integer"
+        },
+        "symbol_count": {
+          "type": "integer"
+        },
+        "initialized_bytes": {
+          "type": "number"
+        },
+        "disassembled_bytes": {
+          "type": "number"
+        },
+        "code_coverage_pct": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": true
+    },
+    "snes": {
+      "type": "object",
+      "required": [
+        "title",
+        "mapping_mode",
+        "rom_type",
+        "rom_size",
+        "valid_header",
+        "checksum",
+        "complement",
+        "dma_channels",
+        "mmio_accesses"
+      ],
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "mapping_mode": {
+          "type": "string"
+        },
+        "rom_type": {
+          "type": "string"
+        },
+        "rom_size": {
+          "type": "string"
+        },
+        "valid_header": {
+          "type": "boolean"
+        },
+        "checksum": {
+          "type": "number"
+        },
+        "complement": {
+          "type": "number"
+        },
+        "dma_channels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "channel",
+              "mode",
+              "targets",
+              "table_pointers",
+              "hits"
+            ],
+            "properties": {
+              "channel": {
+                "type": "integer"
+              },
+              "mode": {
+                "type": "string"
+              },
+              "targets": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "table_pointers": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "hits": {
+                "type": "integer"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "mmio_accesses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "address",
+              "register",
+              "category",
+              "hits",
+              "description"
+            ],
+            "properties": {
+              "address": {
+                "type": "number"
+              },
+              "register": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "hits": {
+                "type": "integer"
+              },
+              "description": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
