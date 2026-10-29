@@ -185,6 +185,14 @@ class ArchitectureDetectorTests(unittest.TestCase):
             result = json.loads(root.stdout)
             self.assertEqual(result["processor"], "x86:LE:64:default")
 
+        cli = subprocess.run(
+            [os.path.join(REPO_ROOT, "ghidra-report.sh"), "--detect-type", path],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(cli.stdout.strip(), "elf")
+
         with open(os.path.join(REPO_ROOT, "ghidra-report.sh"), encoding="utf-8") as handle:
             shell = handle.read()
         self.assertIn('extra_args+=(-processor "$elf_arch")', shell)
