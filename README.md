@@ -444,10 +444,7 @@ verify extension-backed loaders. The default CI runs a smaller pinned-container
 PE analysis/report smoke test; running this entire suite in default CI remains
 open roadmap work.
 
-The integration suite is intended to cover the seven report artifacts, scoring,
-MISP/SARIF output, SNES header/MMIO/DMA extraction, semantic diffing, firmware
-carving, history search, capability and trace engines, SVD injection, file-type
-detection, packaging, and Java compilation. The default CI now verifies the core PE path in the pinned Ghidra 12.2 container, including all seven non-empty reports and JSON/SARIF/MISP envelopes. SNES analysis, extension-backed loaders, and the remainder of the broader suite should be reported as verified only after those checks pass in a configured Ghidra environment.
+The broader suite is intended to cover the seven report artifacts, scoring, MISP/SARIF output, SNES header/MMIO/DMA extraction, semantic diffing, firmware carving, history search, capability and trace engines, SVD injection, file-type detection, packaging, and Java compilation. The default CI container job verifies the core PE path and exercises a synthetic SNES ROM through the raw 65816 fallback, checking header, function, MMIO, and DMA evidence alongside the generated report formats. This does not install or validate optional community loaders; the rest of the broader suite and extension-backed paths still require their own passing acceptance checks.
 
 No test reads samples from `ingress/`; fixtures are generated in temporary
 locations, and real analysis samples should remain git-ignored.
