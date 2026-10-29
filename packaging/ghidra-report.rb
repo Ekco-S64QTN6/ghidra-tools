@@ -20,9 +20,9 @@ class GhidraReport < Formula
     libexec.install "scripts", "rules", "schemas"
     (libexec/"vendor").mkpath
     resource("pyyaml").stage do
-      python = Formula["python@3.12"].opt_bin/"python3.12"
-      system python, "-m", "pip", "install", "--no-deps", "--no-build-isolation",
-             "--target", libexec/"vendor", "."
+      # The YAML parser's pure-Python package is sufficient here and avoids a
+      # native-extension/toolchain dependency in an otherwise script-only formula.
+      cp_r "lib/yaml", libexec/"vendor"
     end
 
     launcher = File.read("packaging/ghidra-report-launcher.sh.in")
