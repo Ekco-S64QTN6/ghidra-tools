@@ -42,6 +42,7 @@ OUTPUT_DIR="$TMP_DIR/output"
 PROJECTS_DIR="$TMP_DIR/projects"
 SCRIPTS_DIR="$TMP_DIR/scripts"
 mkdir -p "$PROJECTS_DIR" "$SCRIPTS_DIR"
+cp "$SCRIPT_DIR/scripts/atomic_publish.py" "$SCRIPTS_DIR/atomic_publish.py"
 FORMAT=all
 FULL_DISASM=false
 WEBHOOK_URL=''
@@ -107,6 +108,9 @@ grep -Fq "Ghidra report generation failed with exit status 37" "$TMP_DIR/failure
 if find "$FAIL_DIR" -maxdepth 1 -name '*_report_*' -type f | grep -q .; then
     fail "partial per-run report artifacts were left behind"
 fi
+if find "$FAIL_DIR" -maxdepth 1 -name '.stage.*' -type d | grep -q .; then
+    fail "failed-export staging directory was left behind"
+fi
 pass "failed report export propagates status, cleans partial files, and preserves latest"
 
 # A successful HTML-only export is valid even though TXT/JSON are not requested.
@@ -127,3 +131,5 @@ pass "HTML-only export succeeds and report-specific log lines remain visible"
 # generate_report() back on an unchecked tee pipeline.
 grep -Fq 'run_headless_logged "$report_log" report' "$SCRIPT_DIR/ghidra-report.sh" || fail "generate_report() no longer uses status-preserving report mode"
 pass "generate_report() is wired to the status-preserving report filter"
+grep -Fq 'atomic_publish.py" symlink' "$SCRIPT_DIR/ghidra-report.sh" || fail "latest-link publication is not using the atomic publisher"
+pass "report_latest.* links use the atomic publisher"
