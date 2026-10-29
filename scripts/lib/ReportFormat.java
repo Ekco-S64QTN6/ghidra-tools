@@ -8,7 +8,7 @@ public class ReportFormat {
      * Escape a Java string for inclusion between JSON quotes.
      *
      * Every JSON control character below U+0020 is escaped. Common controls use
-     * their short JSON spellings; the remaining controls use \u00xx escapes.
+     * their short JSON spellings; the remaining controls use four-digit Unicode escape sequences.
      */
     public static String escapeJson(String s) {
         if (s == null) return "";
