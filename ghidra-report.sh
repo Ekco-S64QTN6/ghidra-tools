@@ -223,7 +223,7 @@ import_and_analyze() {
 
     # Log text is useful to decide whether the SNES loader can fall back, but
     # a missing/changed diagnostic must never turn a failed process into success.
-    if grep -q "Import failed\\|No load spec found\\|could not successfully load" "$import_log"; then
+    if grep -Eq "Import failed|No load spec found|could not successfully load" "$import_log"; then
         if [ "$file_type" = "snes" ]; then
             log_warn "SNES ROM Loader rejected file (possibly non-standard header)."
             log_info "Falling back to raw import with 65816 processor..."
@@ -243,7 +243,7 @@ import_and_analyze() {
                 fallback_status=$?
             fi
 
-            if [ "$fallback_status" -ne 0 ] || grep -q "Import failed\\|No load spec found\\|could not successfully load" "$import_log"; then
+            if [ "$fallback_status" -ne 0 ] || grep -Eq "Import failed|No load spec found|could not successfully load" "$import_log"; then
                 log_error "Import failed even with raw 65816 fallback (exit status: $fallback_status)."
                 rm -f "$import_log"
                 if [ "$fallback_status" -ne 0 ]; then
