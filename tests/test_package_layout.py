@@ -32,7 +32,7 @@ def test_launcher():
             '#!/usr/bin/env bash\n'
             'set -euo pipefail\n'
             'printf "%s\\n" "$GHIDRA_REPORT_DATA_DIR" > "$CAPTURE_FILE"\n'
-            'printf "PYTHONPATH:%s\\n" "$PYTHONPATH" >> "$CAPTURE_FILE"\n',
+            'printf "PYTHONPATH:%s\\n" "$PYTHONPATH" >> "$CAPTURE_FILE"\n'
             'printf "ARG:%s\\n" "$@" >> "$CAPTURE_FILE"\n',
             encoding="utf-8",
         )
