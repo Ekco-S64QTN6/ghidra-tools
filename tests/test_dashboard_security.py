@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -78,6 +79,64 @@ class DashboardSecurityTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(body, b'{"ok": true}')
         self.assertEqual(headers.get("X-Content-Type-Options"), "nosniff")
+
+    def test_report_and_search_apis_use_the_indexed_output_identity(self):
+        output_key = "sample_bin_1234567890_abcdef123456"
+        output_path = os.path.join(self.output_dir, output_key)
+        os.makedirs(output_path)
+        json_path = os.path.join(output_path, "sample_report.json")
+        with open(json_path, "w", encoding="utf-8") as handle:
+            handle.write('{"file": "sample.bin"}')
+        with open(os.path.join(output_path, "report_latest.json"), "w", encoding="utf-8") as handle:
+            handle.write('{"file": "sample.bin"}')
+
+        connection = sqlite3.connect(dashboard.DB_PATH)
+        connection.executescript("""
+            CREATE TABLE reports (
+                id INTEGER PRIMARY KEY, file TEXT UNIQUE, timestamp TEXT,
+                format_label TEXT, risk_score INTEGER, risk_level TEXT,
+                md5 TEXT, sha256 TEXT, imphash TEXT, function_count INTEGER,
+                json_path TEXT
+            );
+            CREATE TABLE suspicious_apis (
+                id INTEGER PRIMARY KEY, report_id INTEGER, library TEXT,
+                function TEXT, mitre TEXT, category TEXT
+            );
+            CREATE TABLE iocs (
+                id INTEGER PRIMARY KEY, report_id INTEGER, type TEXT,
+                value TEXT, address TEXT
+            );
+            CREATE TABLE indicators (
+                id INTEGER PRIMARY KEY, report_id INTEGER, category TEXT,
+                description TEXT, mitre TEXT, weight INTEGER
+            );
+        """)
+        connection.execute(
+            "INSERT INTO reports VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (1, "sample.bin", "2026-10-29T10:00:00Z", "PE", 70, "HIGH",
+             "md5", "sha256", "", 10, json_path),
+        )
+        connection.execute(
+            "INSERT INTO suspicious_apis VALUES (?, ?, ?, ?, ?, ?)",
+            (1, 1, "KERNEL32.dll", "CreateRemoteThread", "T1055", "injection"),
+        )
+        connection.commit()
+        connection.close()
+
+        status, _headers, body = self.request("/api/reports")
+        self.assertEqual(status, 200)
+        reports = json.loads(body.decode("utf-8"))
+        self.assertEqual(reports[0]["file"], "sample.bin")
+        self.assertEqual(reports[0]["output_key"], output_key)
+
+        status, _headers, body = self.request("/api/search?q=CreateRemoteThread")
+        self.assertEqual(status, 200)
+        results = json.loads(body.decode("utf-8"))
+        self.assertEqual(results["sample.bin"]["output_key"], output_key)
+
+        status, _headers, body = self.request(f"/output/{output_key}/report_latest.json")
+        self.assertEqual(status, 200)
+        self.assertIn(b'"file": "sample.bin"', body)
 
     def test_traversal_and_symlink_escape_are_rejected(self):
         escaped_link = os.path.join(self.sample_dir, "escaped.txt")
