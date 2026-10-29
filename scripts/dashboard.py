@@ -10,11 +10,39 @@ import json
 import sqlite3
 import mimetypes
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, unquote
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 DB_PATH = os.path.join(OUTPUT_DIR, "reports.db")
+MAX_SEARCH_LENGTH = 256
+MAX_REPORTS_RESPONSE = 500
+MAX_SEARCH_ROWS = 100
+MAX_SERVED_FILE_BYTES = 50 * 1024 * 1024
+
+
+def resolve_output_path(relative_path):
+    """Resolve a requested report path and reject traversal or symlink escapes."""
+    try:
+        decoded_path = relative_path
+        # Decode repeatedly so double-encoded traversal is not treated as a
+        # harmless literal by one layer and as a path separator by another.
+        for _ in range(8):
+            next_path = unquote(decoded_path)
+            if next_path == decoded_path:
+                break
+            decoded_path = next_path
+        if chr(0) in decoded_path:
+            return None
+
+        output_root = os.path.realpath(OUTPUT_DIR)
+        candidate = os.path.realpath(os.path.join(output_root, decoded_path))
+        if os.path.commonpath((output_root, candidate)) != output_root:
+            return None
+        return candidate
+    except (OSError, ValueError):
+        return None
+
 
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
@@ -240,6 +268,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       }
     }
 
+    function escapeHtml(value) {
+      const entities = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'};
+      return String(value ?? '').replace(/[&<>"']/g, character => entities[character]);
+    }
+
     function renderTable(reports) {
       const tbody = document.getElementById('binariesTable');
       if (!reports.length) {
@@ -250,28 +283,28 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       tbody.innerHTML = reports.map(r => `
         <tr>
           <td>
-            <strong>${r.file}</strong>
-            <div style="font-size:11px; color:var(--text-muted);">${r.timestamp || ''}</div>
+            <strong>${escapeHtml(r.file)}</strong>
+            <div style="font-size:11px; color:var(--text-muted);">${escapeHtml(r.timestamp || '')}</div>
           </td>
-          <td><span class="badge" style="background:#21262d; border:1px solid var(--border);">${r.format_label}</span></td>
+          <td><span class="badge" style="background:#21262d; border:1px solid var(--border);">${escapeHtml(r.format_label)}</span></td>
           <td>
-            <span class="badge ${getBadgeClass(r.risk_level)}">${r.risk_score} / 100 [${r.risk_level}]</span>
-          </td>
-          <td>
-            <div class="mono" title="SHA256: ${r.sha256}">MD5: ${(r.md5 || '').substring(0, 10)}...</div>
+            <span class="badge ${getBadgeClass(r.risk_level)}">${escapeHtml(r.risk_score)} / 100 [${escapeHtml(r.risk_level)}]</span>
           </td>
           <td>
-            <span class="mono" style="color:${r.imphash ? 'var(--accent)' : 'var(--text-muted)'}">${r.imphash ? r.imphash.substring(0, 10) + '...' : '-'}</span>
+            <div class="mono" title="SHA256: ${escapeHtml(r.sha256)}">MD5: ${escapeHtml((r.md5 || '').substring(0, 10))}...</div>
+          </td>
+          <td>
+            <span class="mono" style="color:${r.imphash ? 'var(--accent)' : 'var(--text-muted)'}">${escapeHtml(r.imphash ? r.imphash.substring(0, 10) + '...' : '-')}</span>
           </td>
           <td>
             <div class="actions">
-              <a class="btn btn-primary" href="/output/${r.file}/report_latest.html" target="_blank">HTML</a>
-              <a class="btn" href="/output/${r.file}/report_latest.txt" target="_blank">TXT</a>
-              <a class="btn" href="/output/${r.file}/report_latest.json" target="_blank">JSON</a>
-              <a class="btn" href="/output/${r.file}/report_latest.md" target="_blank">MD</a>
-              <a class="btn" href="/output/${r.file}/report_latest.sarif" target="_blank">SARIF</a>
-              <a class="btn" href="/output/${r.file}/report_latest.yar" target="_blank">YARA</a>
-              <a class="btn" href="/output/${r.file}/report_latest.misp.json" target="_blank">MISP</a>
+              <a class="btn btn-primary" href="/output/${encodeURIComponent(r.file)}/report_latest.html" target="_blank" rel="noopener noreferrer">HTML</a>
+              <a class="btn" href="/output/${r.file}/report_latest.txt" target="_blank" rel="noopener noreferrer">TXT</a>
+              <a class="btn" href="/output/${r.file}/report_latest.json" target="_blank" rel="noopener noreferrer">JSON</a>
+              <a class="btn" href="/output/${r.file}/report_latest.md" target="_blank" rel="noopener noreferrer">MD</a>
+              <a class="btn" href="/output/${r.file}/report_latest.sarif" target="_blank" rel="noopener noreferrer">SARIF</a>
+              <a class="btn" href="/output/${r.file}/report_latest.yar" target="_blank" rel="noopener noreferrer">YARA</a>
+              <a class="btn" href="/output/${r.file}/report_latest.misp.json" target="_blank" rel="noopener noreferrer">MISP</a>
             </div>
           </td>
         </tr>
@@ -325,10 +358,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       list.innerHTML = Object.entries(results).map(([file, info]) => `
         <div style="margin-bottom: 12px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 6px;">
           <div style="font-weight:600; font-size:13px; margin-bottom:4px;">
-            ${file} <span class="badge ${getBadgeClass(info.level)}" style="margin-left:6px;">${info.score}/100 [${info.level}]</span>
+            ${escapeHtml(file)} <span class="badge ${getBadgeClass(info.level)}" style="margin-left:6px;">${escapeHtml(info.score)}/100 [${escapeHtml(info.level)}]</span>
           </div>
           <ul style="padding-left: 20px; font-size: 12px; color: var(--text);">
-            ${info.matches.map(m => `<li>${m}</li>`).join('')}
+            ${info.matches.map(m => `<li>${escapeHtml(m)}</li>`).join('')}
           </ul>
         </div>
       `).join('');
@@ -341,6 +374,35 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 """
 
 class DashboardHandler(BaseHTTPRequestHandler):
+    def end_headers(self):
+        """Apply defensive browser headers to the UI, APIs, and report artifacts."""
+        request_path = urlparse(self.path).path
+        if request_path in ("/", "/index.html"):
+            policy = (
+                "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                "font-src https://fonts.gstatic.com; connect-src 'self'; "
+                "img-src 'self' data:; object-src 'none'; base-uri 'none'; "
+                "frame-ancestors 'none'; form-action 'self'"
+            )
+        elif request_path.startswith("/output/") and request_path.lower().endswith(".html"):
+            # Exported reports may contain data derived from untrusted samples.
+            # Keep them in an opaque sandbox and prohibit script execution.
+            policy = (
+                "default-src 'none'; style-src 'unsafe-inline'; img-src data:; "
+                "object-src 'none'; base-uri 'none'; form-action 'none'; "
+                "frame-ancestors 'none'; sandbox"
+            )
+        else:
+            policy = "default-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        self.send_header("Content-Security-Policy", policy)
+        super().end_headers()
+
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
@@ -362,11 +424,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self.handle_api_search(q)
             return
 
-        # Static file delivery for output directory
+        # Static file delivery is restricted to canonical paths under output/.
         if path.startswith("/output/"):
             rel_path = path[len("/output/"):]
-            file_path = os.path.join(OUTPUT_DIR, rel_path)
-            if os.path.isfile(file_path):
+            file_path = resolve_output_path(rel_path)
+            if file_path and os.path.isfile(file_path):
                 self.serve_file(file_path)
                 return
 
@@ -384,8 +446,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             cur = conn.cursor()
             cur.execute("""
                 SELECT file, timestamp, format_label, risk_score, risk_level, md5, sha256, imphash, function_count
-                FROM reports ORDER BY id DESC
-            """)
+                FROM reports ORDER BY id DESC LIMIT ?
+            """, (MAX_REPORTS_RESPONSE,))
             rows = cur.fetchall()
             reports = []
             for r in rows:
@@ -402,10 +464,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 })
             conn.close()
             self.send_json(reports)
-        except Exception as e:
-            self.send_json({"error": str(e)}, status=500)
+        except Exception:
+            self.send_json({"error": "Failed to read the report index."}, status=500)
 
     def handle_api_search(self, q):
+        if len(q) > MAX_SEARCH_LENGTH:
+            self.send_json({"error": f"Search query exceeds the {MAX_SEARCH_LENGTH}-character limit."}, status=400)
+            return
         if not q or not os.path.exists(DB_PATH):
             self.send_json({})
             return
@@ -420,7 +485,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 SELECT r.file, r.risk_score, r.risk_level, 'Metadata', r.format_label
                 FROM reports r
                 WHERE r.file LIKE ? OR r.md5 LIKE ? OR r.sha256 LIKE ? OR r.imphash LIKE ?
-            """, (query, query, query, query))
+                LIMIT ?
+            """, (query, query, query, query, MAX_SEARCH_ROWS))
             m_hits = cur.fetchall()
 
             # Search in APIs
@@ -428,7 +494,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 SELECT r.file, r.risk_score, r.risk_level, a.library, a.function
                 FROM suspicious_apis a JOIN reports r ON a.report_id = r.id
                 WHERE a.library LIKE ? OR a.function LIKE ? OR a.category LIKE ? OR a.mitre LIKE ?
-            """, (query, query, query, query))
+                LIMIT ?
+            """, (query, query, query, query, MAX_SEARCH_ROWS))
             api_hits = cur.fetchall()
 
             # Search in IOCs
@@ -436,7 +503,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 SELECT r.file, r.risk_score, r.risk_level, i.type, i.value
                 FROM iocs i JOIN reports r ON i.report_id = r.id
                 WHERE i.value LIKE ? OR i.type LIKE ?
-            """, (query, query))
+                LIMIT ?
+            """, (query, query, MAX_SEARCH_ROWS))
             ioc_hits = cur.fetchall()
 
             # Search in indicators
@@ -444,7 +512,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 SELECT r.file, r.risk_score, r.risk_level, ind.category, ind.description
                 FROM indicators ind JOIN reports r ON ind.report_id = r.id
                 WHERE ind.description LIKE ? OR ind.mitre LIKE ?
-            """, (query, query))
+                LIMIT ?
+            """, (query, query, MAX_SEARCH_ROWS))
             ind_hits = cur.fetchall()
 
             files = {}
@@ -483,16 +552,26 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         try:
             with open(file_path, "rb") as f:
-                content = f.read()
+                if os.fstat(f.fileno()).st_size > MAX_SERVED_FILE_BYTES:
+                    self.send_response(413)
+                    self.end_headers()
+                    self.wfile.write(b"Report exceeds the dashboard response size limit.")
+                    return
+                content = f.read(MAX_SERVED_FILE_BYTES + 1)
+            if len(content) > MAX_SERVED_FILE_BYTES:
+                self.send_response(413)
+                self.end_headers()
+                self.wfile.write(b"Report exceeds the dashboard response size limit.")
+                return
             self.send_response(200)
             self.send_header("Content-Type", ctype + "; charset=utf-8" if "text" in ctype or "json" in ctype else ctype)
             self.send_header("Content-Length", str(len(content)))
             self.end_headers()
             self.wfile.write(content)
-        except Exception as e:
-            self.send_response(500)
+        except OSError:
+            self.send_response(404)
             self.end_headers()
-            self.wfile.write(str(e).encode("utf-8"))
+            self.wfile.write(b"Report not found.")
 
     def send_json(self, data, status=200):
         body = json.dumps(data).encode("utf-8")
@@ -506,10 +585,18 @@ class DashboardHandler(BaseHTTPRequestHandler):
         # Silence verbose request logs
         return
 
-def run_server(port=8080):
-    server_address = ("", port)
-    httpd = HTTPServer(server_address, DashboardHandler)
-    print(f"[*] ghidra-report Dashboard running at http://localhost:{port}/")
+def create_server(port=8080, host=None):
+    """Create the HTTP server, loopback-only unless an explicit host is configured."""
+    bind_host = host or os.environ.get("GHIDRA_DASHBOARD_HOST", "127.0.0.1")
+    return HTTPServer((bind_host, port), DashboardHandler)
+
+
+def run_server(port=8080, host=None):
+    httpd = create_server(port, host)
+    bind_host, bind_port = httpd.server_address[:2]
+    print(f"[*] ghidra-report Dashboard listening on {bind_host}:{bind_port}")
+    if bind_host in ("127.0.0.1", "::1"):
+        print(f"[*] Local browser URL: http://localhost:{bind_port}/")
     print(f"[*] Connected to SQLite database: {DB_PATH}")
     print("[*] Press Ctrl+C to stop.")
     try:
@@ -518,6 +605,19 @@ def run_server(port=8080):
         print("\n[*] Dashboard stopped.")
         httpd.server_close()
 
+def parse_args(argv=None):
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Serve ghidra-report history and artifacts.")
+    parser.add_argument("port", nargs="?", type=int, default=8080)
+    parser.add_argument(
+        "--host",
+        default=os.environ.get("GHIDRA_DASHBOARD_HOST", "127.0.0.1"),
+        help="bind address (default: 127.0.0.1; exposing it is unauthenticated)",
+    )
+    return parser.parse_args(argv)
+
+
 if __name__ == "__main__":
-    port = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 8080
-    run_server(port)
+    args = parse_args()
+    run_server(args.port, args.host)
