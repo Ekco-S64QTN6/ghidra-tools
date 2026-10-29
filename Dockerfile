@@ -3,7 +3,7 @@ FROM eclipse-temurin:25-jdk-jammy
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV GHIDRA_VERSION=12.2_PUBLIC
-ENV GHIDRA_DATE=20261022
+ENV GHIDRA_DATE=20261016
 ENV GHIDRA_SHA256=2c2cd776db3c1f6a097ba418922378ac3649cadd5e844a6f5f088ae628a7be67
 ENV GHIDRA_INSTALL_DIR=/opt/ghidra
 
@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Ghidra
 RUN curl -fsSL --retry 3 --retry-delay 2 -o /tmp/ghidra.zip \
-    https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.2_build/ghidra_12.2_PUBLIC_20261022.zip \
+    https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.2_build/ghidra_12.2_PUBLIC_20261016.zip \
     && echo "${GHIDRA_SHA256}  /tmp/ghidra.zip" | sha256sum -c - \
     && unzip -q /tmp/ghidra.zip -d /opt \
     && mv /opt/ghidra_* "${GHIDRA_INSTALL_DIR}" \
