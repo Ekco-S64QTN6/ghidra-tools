@@ -221,7 +221,7 @@ or `[UPDATED]` against the baseline.
 
 ### Searching history
 
-The indexer stores one current row per report filename in `output/reports.db`. Search uses SQLite `LIKE` queries, not FTS5. It covers filenames and hashes, suspicious APIs, IOCs, and threat indicators; it does not search extracted strings, recovered strings, function symbols, or rule results. Re-indexing the same filename updates its row, so this is not yet a complete per-run history:
+The history index preserves separate reports by canonical JSON report path. Search combines case-insensitive SQLite `LIKE` matching for metadata, hashes, suspicious APIs, IOCs, and threat indicators with an FTS5 index over extracted/recovered strings, function names/symbols, exports, rules, capabilities, and findings found in selected JSON fields. Re-indexing the same JSON path refreshes its free-text index without duplicating the history row. Existing rows are migrated in place; older reports only gain recovered-string/function search content after their JSON is re-indexed (the migration cannot reconstruct fields that were never stored in SQLite):
 
 ```bash
 ./ghidra-report.sh --search "CreateRemoteThread"
@@ -300,7 +300,7 @@ that reads only from that container.
 | `svd_injector.py` | `--svd` | Parses vendor CMSIS-SVD XML into peripheral base addresses, register offsets and IRQ vectors for bare-metal ARM Cortex-M / MIPS. |
 | `capability_engine.py` | `--rules` | Evaluates `rules/*.yaml` with AND/OR/NOT and N-of-M logic across instruction, block and function scope. |
 | `trace_correlator.py` | `--trace` | Correlates a CAPE/DRAKVUF sandbox trace against the static import set using a sliding call window, so multi-step behaviours (alloc → write → create thread) match as one capability. |
-| `index_report.py` | *(automatic)* | Indexes each completed JSON report path into `output/reports.db`; separate runs and same-basename inputs remain distinct. `--search` and dashboard searches use SQLite `LIKE` over selected metadata, hashes, suspicious APIs, IOCs, and indicators (not FTS5). |
+| `index_report.py` | *(automatic)* | Indexes each completed JSON report path into `output/reports.db`; separate runs and same-basename inputs remain distinct. Search combines SQLite `LIKE` matches on metadata/APIs/IOCs/indicators with FTS5 search across recovered text, symbols/functions, exports, rules, capabilities, and findings. |
 | `dashboard.py` | `--dashboard` | Standalone `http.server` UI + REST API. Loopback by default; `GHIDRA_DASHBOARD_HOST` opts into another bind address. |
 
 ### Format support
