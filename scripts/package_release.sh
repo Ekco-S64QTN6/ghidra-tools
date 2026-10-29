@@ -4,7 +4,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VERSION="0.2.0"
+VERSION="$(tr -d '\r\n' < "$SCRIPT_DIR/VERSION")"
+if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "[ERROR] Invalid project version in VERSION: $VERSION" >&2
+    exit 2
+fi
 DIST_DIR="$SCRIPT_DIR/dist"
 ARCHIVE_NAME="ghidra-report-v${VERSION}-linux-x86_64"
 TARGET_TAR="$DIST_DIR/${ARCHIVE_NAME}.tar.gz"
@@ -19,6 +23,7 @@ cp -r "$SCRIPT_DIR/ghidra-report.sh" \
       "$SCRIPT_DIR/ghidra-report.1" \
       "$SCRIPT_DIR/README.md" \
       "$SCRIPT_DIR/LICENSE" \
+      "$SCRIPT_DIR/VERSION" \
       "$SCRIPT_DIR/requirements-rules.txt" \
       "$SCRIPT_DIR/requirements-test.txt" \
       "$SCRIPT_DIR/schemas" \
