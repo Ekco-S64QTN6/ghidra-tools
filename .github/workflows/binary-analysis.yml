@@ -34,3 +34,6 @@ jobs:
 
       - name: Test dashboard security and HTTP behavior
         run: python3 tests/test_dashboard_security.py
+
+      - name: Test bounded firmware carving
+        run: python3 tests/test_firmware_carver.py
