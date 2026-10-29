@@ -13,7 +13,7 @@ run_headless_logged() {
     shift 2
 
     case "$filter_mode" in
-        import|fallback) ;;
+        import|fallback|report) ;;
         *)
             printf '[ERROR] Unknown headless log filter mode: %s\n' "$filter_mode" >&2
             return 2
@@ -33,6 +33,11 @@ run_headless_logged() {
                 ;;
             fallback)
                 if printf '%s\n' "$line" | grep -qE 'INFO.*[Ii]mport|INFO.*[Aa]nalys|ERROR|WARN'; then
+                    show_line=true
+                fi
+                ;;
+            report)
+                if printf '%s\\n' "$line" | grep -qE 'report:|Report written|rule:|ERROR|Script'; then
                     show_line=true
                 fi
                 ;;
