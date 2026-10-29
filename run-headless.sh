@@ -12,7 +12,7 @@ if [[ -z "$GHIDRA_ROOT" || ! -d "$GHIDRA_ROOT" ]]; then
     GHIDRA_ROOT=""
     for candidate in \
         "/var/lib/flatpak/app/org.ghidra_sre.Ghidra/x86_64/stable/active/files/lib/ghidra" \
-        "/var/lib/flatpak/app/org.ghidra_sre.Ghidra/current/active/files/ghidra" \
+        "/var/lib/flatpak/app/org.ghidra_sre.Ghidra/current/active/files/lib/ghidra" \
         "/opt/ghidra" \
         "/usr/share/ghidra"; do
         if [[ -d "$candidate" ]]; then
