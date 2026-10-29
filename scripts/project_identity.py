@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compute stable output and Ghidra project identities for an input sample."""
+"""Compute stable report-output and Ghidra-project identities for an input sample."""
 
 import hashlib
 import os
@@ -29,18 +29,19 @@ def _source_identity(path):
     safe_base = safe_base[:72]
     path_digest = hashlib.sha256(os.fsencode(real_path)).hexdigest()[:10]
     content_digest = _digest_file(real_path)[:12]
-    return safe_base, path_digest, content_digest
+    output_key = f"{safe_base}_{path_digest}_{content_digest}"
+    return real_path, output_key
 
 
 def output_identity(path):
-    """Return the stable output directory name for a path and its current bytes."""
-    safe_base, path_digest, content_digest = _source_identity(path)
-    return f"{safe_base}_{path_digest}_{content_digest}"
+    """Return a stable report-output directory name for this path and its current bytes."""
+    _real_path, output_key = _source_identity(path)
+    return output_key
 
 
 def project_identity(path, findcrypt="false", ghidra_root=""):
     """Return the project name including settings that can affect its contents."""
-    output_key = output_identity(path)
+    _real_path, output_key = _source_identity(path)
     settings = (
         f"findcrypt={findcrypt}\0"
         f"ghidra_root={os.path.realpath(ghidra_root) if ghidra_root else ''}"
@@ -51,8 +52,7 @@ def project_identity(path, findcrypt="false", ghidra_root=""):
 
 def identities(path, findcrypt="false", ghidra_root=""):
     """Compute project and output names while hashing the sample only once."""
-    safe_base, path_digest, content_digest = _source_identity(path)
-    output_key = f"{safe_base}_{path_digest}_{content_digest}"
+    real_path, output_key = _source_identity(path)
     settings = (
         f"findcrypt={findcrypt}\0"
         f"ghidra_root={os.path.realpath(ghidra_root) if ghidra_root else ''}"
@@ -63,11 +63,9 @@ def identities(path, findcrypt="false", ghidra_root=""):
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
+    command = "project"
     if argv and argv[0] in {"project", "output", "identities"}:
         command = argv.pop(0)
-    else:
-        # Keep the original one-file CLI as a project-name alias.
-        command = "project"
 
     try:
         if command == "output":
