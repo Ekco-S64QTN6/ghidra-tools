@@ -44,8 +44,11 @@ jobs:
       - name: Test headless log exit-status preservation
         run: bash tests/test_headless_log.sh
 
+      - name: Test report generation exit-status handling
+        run: bash tests/test_report_generation.sh
+
       - name: Check shell script syntax
-        run: bash -n ghidra-report.sh scripts/headless_log.sh tests/test_headless_log.sh
+        run: bash -n ghidra-report.sh scripts/headless_log.sh tests/test_headless_log.sh tests/test_report_generation.sh
 
       - name: Test batch failure propagation
         run: bash tests/test_batch_runner.sh

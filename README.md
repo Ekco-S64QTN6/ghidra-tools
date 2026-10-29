@@ -406,6 +406,7 @@ python3 tests/test_project_identity.py
 ./ghidra-report.sh --help >/dev/null
 bash tests/test_run_headless.sh
 bash tests/test_headless_log.sh
+bash tests/test_report_generation.sh
 bash tests/test_batch_runner.sh
 python3 tests/test_dashboard_security.py
 python3 tests/test_firmware_carver.py
