@@ -52,3 +52,10 @@ fi
 grep -Fq "must be a positive integer" "$TMP_DIR/invalid.err" || fail "invalid worker-count diagnostic missing"
 [[ "$(wc -l < "$BATCH_RUN_LOG")" -eq "$before" ]] || fail "worker ran despite invalid worker count"
 pass "invalid worker count fails closed"
+
+# Missing items are a usage error rather than a successful empty batch.
+if run_batch_workers 2 synthetic_worker 2>"$TMP_DIR/empty.err"; then
+    fail "empty batch unexpectedly succeeded"
+fi
+grep -Fq "at least one item" "$TMP_DIR/empty.err" || fail "empty batch diagnostic missing"
+pass "empty batch arguments fail closed"
