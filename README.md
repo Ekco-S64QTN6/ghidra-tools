@@ -48,7 +48,7 @@ Markdown file, a standalone HTML page, a SARIF run, a YARA rule and a MISP event
 | **Sees through obfuscation** | Stack strings are reconstructed from immediate `MOV` sequences, and a P-code emulator runs loop-dense functions to recover runtime-built and XOR-decoded strings. |
 | **Rules live outside the code** | Capability detection is YAML (`rules/*.yaml`), evaluated at instruction, block and function scope — capa-style — so detections can be added without touching Java. |
 | **Not just PE/ELF** | SNES, GBA, N64, PS1, stripped Go, UEFI volumes and bare-metal ARM via CMSIS-SVD all have first-class loader paths. |
-| **Ends in a pipeline, not a file** | SARIF for code scanning, MISP for threat intel, YARA for hunting, SQLite FTS for history, webhooks for alerting. |
+| **Ends in a pipeline, not a file** | SARIF for code scanning, MISP for threat intel, YARA for hunting, searchable SQLite history, webhooks for alerting. |
 
 ---
 
@@ -175,7 +175,7 @@ against a malware rubric.
 ./ghidra-report.sh --watch                   Daemon: analyze new drops as they land
 ./ghidra-report.sh --reimport <binary>       Discard the cached project, re-analyze
 ./ghidra-report.sh --diff <a> <b>            Semantic diff of two reports
-./ghidra-report.sh --search <term>           Full-text search every past run
+./ghidra-report.sh --search <term>           Search indexed metadata, APIs, IOCs, and indicators
 ./ghidra-report.sh --dashboard [port]        Web UI over the report history
 ./ghidra-report.sh --rules [report|binary]   Evaluate the YAML capability rules
 ./ghidra-report.sh --trace <trace.json>      Correlate a sandbox trace with static imports
@@ -211,7 +211,7 @@ or `[UPDATED]` against the baseline.
 
 ### Searching history
 
-Every run is indexed into `output/reports.db` (SQLite + FTS5):
+The indexer stores one current row per report filename in `output/reports.db`. Search uses SQLite `LIKE` queries, not FTS5. It covers filenames and hashes, suspicious APIs, IOCs, and threat indicators; it does not search extracted strings, recovered strings, function symbols, or rule results. Re-indexing the same filename updates its row, so this is not yet a complete per-run history:
 
 ```bash
 ./ghidra-report.sh --search "CreateRemoteThread"
@@ -261,7 +261,7 @@ that reads only from that container.
         │                  │      │   StackStringDetector │                ▼
         │                  │      │   EmulatorDeobfuscator│     ┌──────────────────────┐
         │                  │      │   SnesAnalyzer        │     │  output/reports.db   │
-        │                  │      │   DecompilerExporter  │     │  (SQLite + FTS5)     │
+        │                  │      │   DecompilerExporter  │     │  (SQLite LIKE)       │
         │                  │      │   HeuristicScorer     │     └──────────────────────┘
         │                  │      ▼                       │                │
         │                  │   ReportModel.ReportData     │                ▼
@@ -290,7 +290,7 @@ that reads only from that container.
 | `svd_injector.py` | `--svd` | Parses vendor CMSIS-SVD XML into peripheral base addresses, register offsets and IRQ vectors for bare-metal ARM Cortex-M / MIPS. |
 | `capability_engine.py` | `--rules` | Evaluates `rules/*.yaml` with AND/OR/NOT and N-of-M logic across instruction, block and function scope. |
 | `trace_correlator.py` | `--trace` | Correlates a CAPE/DRAKVUF sandbox trace against the static import set using a sliding call window, so multi-step behaviours (alloc → write → create thread) match as one capability. |
-| `index_report.py` | *(automatic)* | Indexes every run into `output/reports.db` for `--search` and the dashboard. |
+| `index_report.py` | *(automatic)* | Indexes the latest report per filename into `output/reports.db`; `--search` and the dashboard use `LIKE` queries over filenames/hashes, suspicious APIs, IOCs, and indicators. |
 | `dashboard.py` | `--dashboard` | Standalone `http.server` UI + REST API. Loopback by default; `GHIDRA_DASHBOARD_HOST` opts into another bind address. |
 
 ### Format support
