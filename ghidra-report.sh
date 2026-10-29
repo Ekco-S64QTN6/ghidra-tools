@@ -610,14 +610,18 @@ PYDIFF
 # Start the interactive web dashboard
 serve_dashboard() {
     local port="${1:-8080}"
-    log_step "Starting ghidra-report interactive dashboard on http://localhost:${port}..."
-    log_info "Browse reports, search IOCs, and diff binaries at: ${BOLD}http://localhost:${port}/${NC}"
+    local bind_host="${GHIDRA_DASHBOARD_HOST:-127.0.0.1}"
+    log_step "Starting ghidra-report dashboard (bind ${bind_host}:${port})..."
+    log_info "Local browser URL: ${BOLD}http://localhost:${port}/${NC}"
+    if [ "$bind_host" != "127.0.0.1" ] && [ "$bind_host" != "::1" ]; then
+        log_warn "Dashboard has no authentication; expose non-loopback binds only on a trusted, protected network."
+    fi
     log_info "Press Ctrl+C to stop."
     echo ""
     if [ -f "$SCRIPTS_DIR/dashboard.py" ]; then
         python3 "$SCRIPTS_DIR/dashboard.py" "$port"
     else
-        python3 -m http.server "$port" --directory "$SCRIPT_DIR"
+        python3 -m http.server "$port" --bind "$bind_host" --directory "$SCRIPT_DIR"
     fi
 }
 
