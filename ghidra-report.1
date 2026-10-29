@@ -71,6 +71,8 @@ Exports are written to a private staging directory and moved into place only aft
 .IP \(bu 2
 .B report_latest.json
 \- Complete structured metadata and machine-readable triage dictionary.
+.PP
+The primary JSON report declares \fBschema_version=1.0.0\fR and is defined by \fBschemas/report-v1.schema.json\fR in the repository. The version changes when a consumer-visible contract change requires a new schema revision; additive fields may appear without removing existing fields.
 .IP \(bu 2
 .B report_latest.md
 \- GitHub-flavored Markdown report with tables and alerts.
