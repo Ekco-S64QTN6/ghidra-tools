@@ -62,6 +62,18 @@ class TraceCorrelatorTests(unittest.TestCase):
         self.assertEqual(trace["calls"][1]["thread_id"], 5)
         self.assertEqual(trace["calls"][1]["arguments"], {"length": 10})
 
+    def test_anonymous_cape_processes_get_distinct_identities(self):
+        trace = self.load_value({
+            "behavior": {
+                "processes": [
+                    {"pid": None, "calls": [{"api": "VirtualAllocEx"}, {"api": "CreateRemoteThread"}]},
+                    {"process_id": None, "calls": [{"api": "WriteProcessMemory"}]},
+                ]
+            }
+        })
+        self.assertEqual([call["process_id"] for call in trace["calls"]], ["process-0", "process-0", "process-1"])
+        self.assertEqual(trace_correlator.match_sliding_chains(trace["calls"]), [])
+
     def test_case_insensitive_api_correlation(self):
         trace = {
             "calls": [
