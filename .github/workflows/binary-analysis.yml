@@ -50,6 +50,7 @@ jobs:
           version="$(cat VERSION)"
           archive="dist/ghidra-report-v${version}-linux-x86_64.tar.gz"
           sha256sum -c "${archive}.sha256"
+          tar -tzf "$archive" | grep -Fxq "ghidra-report/VERSION"
           tar -tzf "$archive" | grep -Fxq "ghidra-report/schemas/report-v1.schema.json"
           tar -tzf "$archive" | grep -Fxq "ghidra-report/requirements-test.txt"
           tar -tzf "$archive" | grep -Fxq "ghidra-report/requirements-rules.txt"
