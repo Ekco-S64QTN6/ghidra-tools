@@ -64,6 +64,8 @@ The default container pins Ghidra 12.2 and JDK 25 and verifies the official Ghid
 .SH OUTPUT ARTIFACTS
 Each analyzed input receives dedicated outputs in \fBoutput/<output_key>/\fR. The stable key contains a sanitized basename, canonical source-path hash, and content hash, so same-named inputs do not collide:
 .PP
+A source checkout stores writable data beside the CLI by default. Package launchers use \fB${XDG_DATA_HOME:-$HOME/.local/share}/ghidra-report\fR so reports and project databases are not written beneath a read-only install prefix. Set \fBGHIDRA_REPORT_DATA_DIR\fR to replace the package data root, or set \fBGHIDRA_REPORT_INGRESS_DIR\fR, \fBGHIDRA_REPORT_OUTPUT_DIR\fR, \fBGHIDRA_REPORT_PROJECTS_DIR\fR, or \fBGHIDRA_REPORT_DB_PATH\fR to override a particular location.
+.PP
 Exports are written to a private staging directory and moved into place only after the exporter succeeds. Each \fBreport_latest.*\fR symlink is replaced atomically, so readers do not observe a missing-link interval or a partially written linked file. The set of links for multiple formats is not switched as one transaction.
 .IP \(bu 2
 .B report_latest.txt
