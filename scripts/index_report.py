@@ -6,9 +6,64 @@ import sqlite3
 
 DEFAULT_OUTPUT_DIR = os.environ.get("GHIDRA_REPORT_OUTPUT_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "output"))
 DB_PATH = os.path.abspath(os.environ.get("GHIDRA_REPORT_DB_PATH", os.path.join(DEFAULT_OUTPUT_DIR, "reports.db")))
+MAX_SEARCH_TEXT_CHARS = 1_000_000
+FTS_MIGRATION_NAME = "reports_fts5_search_text_v1"
+SEARCHABLE_REPORT_FIELDS = (
+    "deobfuscated_strings", "strings", "defined_strings", "recovered_strings",
+    "stack_strings", "top_functions", "functions", "symbols", "exports",
+    "rules", "capabilities", "findings", "shellcode_findings",
+)
 
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
+
+def _iter_text_values(value, depth=0):
+    """Yield bounded-depth string representations from selected JSON subtrees."""
+    if depth > 12 or value is None:
+        return
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if isinstance(key, str):
+                yield key
+            yield from _iter_text_values(child, depth + 1)
+    elif isinstance(value, (list, tuple)):
+        for child in value:
+            yield from _iter_text_values(child, depth + 1)
+    elif isinstance(value, (str, int, float)) and not isinstance(value, bool):
+        text = str(value).strip()
+        if text:
+            yield text
+
+
+def search_text_from_report(data):
+    """Flatten strings, recovered values, symbols, functions, and rule findings for FTS."""
+    parts = []
+    total_chars = 0
+    for field in SEARCHABLE_REPORT_FIELDS:
+        if field not in data:
+            continue
+        for token in _iter_text_values(data[field]):
+            separator = 1 if parts else 0
+            remaining = MAX_SEARCH_TEXT_CHARS - total_chars - separator
+            if remaining <= 0:
+                return " ".join(parts)
+            token = token[:remaining]
+            if token:
+                parts.append(token)
+                total_chars += separator + len(token)
+            if total_chars >= MAX_SEARCH_TEXT_CHARS:
+                return " ".join(parts)
+    return " ".join(parts)
+
+
+def fts_phrase_query(query):
+    """Quote user text as an FTS5 phrase so punctuation cannot change query syntax."""
+    value = str(query or "").strip()
+    if not value:
+        return ""
+    return '"' + value.replace('"', '""') + '"'
+
+
+def get_db(db_path=None):
+    conn = sqlite3.connect(db_path or DB_PATH)
     cur = conn.cursor()
     cur.execute("""
         CREATE TABLE IF NOT EXISTS reports (
@@ -22,7 +77,8 @@ def get_db():
             sha256 TEXT,
             imphash TEXT,
             function_count INTEGER,
-            json_path TEXT
+            json_path TEXT,
+            search_text TEXT NOT NULL DEFAULT ''
         )
     """)
     cur.execute("""
@@ -58,6 +114,7 @@ def get_db():
         )
     """)
     _migrate_report_identity(conn)
+    _ensure_fts_search(conn)
     conn.commit()
     return conn
 
@@ -78,12 +135,14 @@ def _has_unique_file_index(conn):
 
 
 def _migrate_report_identity(conn):
-    """Remove the legacy UNIQUE(file) constraint while preserving report IDs and findings."""
+    """Remove the legacy UNIQUE(file) constraint and add identity/search columns."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(reports)").fetchall()}
     if _has_unique_file_index(conn):
         conn.commit()
         conn.execute("PRAGMA foreign_keys = OFF")
         try:
             conn.execute("BEGIN IMMEDIATE")
+            old_search_expr = "search_text" if "search_text" in columns else "''"
             conn.execute("""
                 CREATE TABLE reports_new (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -96,15 +155,17 @@ def _migrate_report_identity(conn):
                     sha256 TEXT,
                     imphash TEXT,
                     function_count INTEGER,
-                    json_path TEXT
+                    json_path TEXT,
+                    search_text TEXT NOT NULL DEFAULT ''
                 )
             """)
-            conn.execute("""
+            conn.execute(f"""
                 INSERT INTO reports_new
                     (id, file, timestamp, format_label, risk_score, risk_level,
-                     md5, sha256, imphash, function_count, json_path)
+                     md5, sha256, imphash, function_count, json_path, search_text)
                 SELECT id, file, timestamp, format_label, risk_score, risk_level,
-                       md5, sha256, imphash, function_count, json_path
+                       md5, sha256, imphash, function_count, json_path,
+                       {old_search_expr}
                 FROM reports
             """)
             conn.execute("DROP TABLE reports")
@@ -116,11 +177,59 @@ def _migrate_report_identity(conn):
         finally:
             conn.execute("PRAGMA foreign_keys = ON")
 
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(reports)").fetchall()}
+    if "search_text" not in columns:
+        conn.execute("ALTER TABLE reports ADD COLUMN search_text TEXT NOT NULL DEFAULT ''")
     conn.execute("""
         CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_json_path_unique
         ON reports(json_path)
     """)
 
+
+def _ensure_fts_search(conn):
+    """Create/migrate FTS5 search storage and backfill rows already in report history."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            name TEXT PRIMARY KEY,
+            applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    try:
+        conn.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS reports_fts
+            USING fts5(search_text, content='reports', content_rowid='id')
+        """)
+    except sqlite3.OperationalError as exc:
+        if "fts5" in str(exc).lower() or "no such module" in str(exc).lower():
+            raise RuntimeError(
+                "SQLite FTS5 support is required for indexed-string history search"
+            ) from exc
+        raise
+
+    conn.executescript("""
+        CREATE TRIGGER IF NOT EXISTS reports_fts_ai AFTER INSERT ON reports BEGIN
+            INSERT INTO reports_fts(rowid, search_text)
+            VALUES (new.id, new.search_text);
+        END;
+        CREATE TRIGGER IF NOT EXISTS reports_fts_ad AFTER DELETE ON reports BEGIN
+            INSERT INTO reports_fts(reports_fts, rowid, search_text)
+            VALUES ('delete', old.id, old.search_text);
+        END;
+        CREATE TRIGGER IF NOT EXISTS reports_fts_au AFTER UPDATE OF search_text ON reports BEGIN
+            INSERT INTO reports_fts(reports_fts, rowid, search_text)
+            VALUES ('delete', old.id, old.search_text);
+            INSERT INTO reports_fts(rowid, search_text)
+            VALUES (new.id, new.search_text);
+        END;
+    """)
+    migration = conn.execute(
+        "SELECT 1 FROM schema_migrations WHERE name = ?", (FTS_MIGRATION_NAME,)
+    ).fetchone()
+    if migration is None:
+        # Rebuild also backfills old metadata rows and any search_text values
+        # already present before the external-content FTS table was created.
+        conn.execute("INSERT INTO reports_fts(reports_fts) VALUES ('rebuild')")
+        conn.execute("INSERT INTO schema_migrations(name) VALUES (?)", (FTS_MIGRATION_NAME,))
 
 def _output_key_for_path(json_path, filename):
     """Use the report's containing output directory to distinguish equal basenames."""
@@ -149,9 +258,12 @@ def index_report(json_path):
     threat = data.get("threat_summary", {})
     stats = data.get("analysis_stats", {})
 
+    search_text = search_text_from_report(data)
     cur.execute("""
-        INSERT INTO reports (file, timestamp, format_label, risk_score, risk_level, md5, sha256, imphash, function_count, json_path)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO reports
+            (file, timestamp, format_label, risk_score, risk_level, md5, sha256,
+             imphash, function_count, json_path, search_text)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(json_path) DO UPDATE SET
             file=excluded.file,
             timestamp=excluded.timestamp,
@@ -161,7 +273,8 @@ def index_report(json_path):
             md5=excluded.md5,
             sha256=excluded.sha256,
             imphash=excluded.imphash,
-            function_count=excluded.function_count
+            function_count=excluded.function_count,
+            search_text=excluded.search_text
     """, (
         filename,
         timestamp,
@@ -172,7 +285,8 @@ def index_report(json_path):
         hashes.get("sha256", ""),
         hashes.get("imphash", ""),
         stats.get("function_count", 0),
-        json_path
+        json_path,
+        search_text,
     ))
     
     cur.execute("SELECT id FROM reports WHERE json_path = ?", (json_path,))
@@ -269,7 +383,21 @@ def search_db(query):
     """, (q, q))
     ind_hits = cur.fetchall()
 
-    total_hits = len(report_hits) + len(api_hits) + len(ioc_hits) + len(ind_hits)
+    text_hits = []
+    fts_query = fts_phrase_query(query)
+    if fts_query:
+        cur.execute("""
+            SELECT r.id, r.file, r.risk_score, r.risk_level, r.json_path,
+                   snippet(reports_fts, 0, '[', ']', ' … ', 12)
+            FROM reports_fts
+            JOIN reports r ON r.id = reports_fts.rowid
+            WHERE reports_fts MATCH ?
+            ORDER BY bm25(reports_fts), r.timestamp DESC, r.id DESC
+            LIMIT 100
+        """, (fts_query,))
+        text_hits = cur.fetchall()
+
+    total_hits = len(report_hits) + len(api_hits) + len(ioc_hits) + len(ind_hits) + len(text_hits)
     if total_hits == 0:
         print("  No matching records found across historical analysis reports.\n")
         conn.close()
@@ -302,6 +430,9 @@ def search_db(query):
 
     for row in ind_hits:
         add_match(row[1], row[6], row[2], row[3], f"Threat Flag: {row[4]}")
+
+    for row in text_hits:
+        add_match(row[1], row[4], row[2], row[3], f"Indexed text: {row[5]}")
 
     for output_key, info in files.items():
         print(f"\n  Target Binary: {info['file']}  [Output: {output_key}]  [Risk: {info['score']}/100 - {info['level']}]")

@@ -247,7 +247,7 @@ Make it production-ready for security workflows, CI/CD, and threat intelligence 
 - [x] **Dockerized deployment** (`Dockerfile`, `docker-compose.yml`) — container pinned to Ghidra 12.2 and Eclipse Temurin JDK 25; official Ghidra archive SHA-256 is verified during build
 - [x] **GitHub Actions workflow** (`.github/workflows/binary-analysis.yml`) — fast no-Ghidra regressions plus a pinned-container PE import/report smoke test; SARIF upload is not enabled because the workflow does not publish a repository artifact
 - [x] **Slack/Discord/webhook notifications** — configurable alerts (`--webhook <url>`) on completion or when threat score exceeds threshold
-- [x] **SQLite report index (partial)** — indexes each JSON report path idempotently and preserves distinct records for same-basename inputs, with a legacy schema migration preserving findings; search covers selected metadata, hashes, suspicious APIs, IOCs, and indicators using `LIKE` (not FTS5). FTS5 and broader string/symbol indexing remain open in `ROADMAP.md`.
+- [x] **SQLite report index (partial)** — indexes each JSON report path idempotently and preserves distinct records for same-basename inputs, with a legacy schema migration preserving findings; search combines `LIKE` over selected metadata/APIs/IOCs/indicators with FTS5 over extracted/recovered strings, symbols/functions, exports, rules, capabilities, and findings. Query pagination, retention/export, and wider migration coverage remain open in `ROADMAP.md`.
 - [x] **Web dashboard** (`scripts/dashboard.py`) — standalone Python HTTP server; browse reports, use `LIKE`-based search over the indexed fields, and inspect artifacts (`--dashboard [port]`).
 - [x] **OpenCTI / Shuffle SOAR integration** (`docs/SOAR_INTEGRATION.md`) — automated webhook playbooks and MISP/SARIF ingestion guides
 
@@ -308,7 +308,7 @@ Make it production-ready for security workflows, CI/CD, and threat intelligence 
 
 ## Current history/search limitation (2026-10-29)
 
-This plan records intended milestones, not a claim that all planned storage behavior has shipped. The current implementation uses ordinary SQLite tables and `LIKE` predicates; it does not create FTS5 virtual tables. Search covers report filenames/hashes, suspicious APIs, IOCs, and threat indicators. It does not index extracted strings or symbols, and re-indexing a filename replaces its previous row. See `ROADMAP.md` section 1.8 for the remaining historical-run and FTS work.
+This plan records intended milestones, not a claim that all planned storage behavior has shipped. The current index preserves reports by canonical JSON report path and combines SQLite `LIKE` predicates for report metadata/APIs/IOCs/indicators with an FTS5 virtual table for extracted/recovered strings, function names/symbols, exports, rules, capabilities, and findings from selected JSON fields. Re-indexing the same report path refreshes the FTS data. Legacy rows are migrated, but free-text content for old reports is populated only when their JSON is re-indexed. Pagination/limits, retention/export, and broader migration/query behavior remain in `ROADMAP.md` section 1.8.
 
 ## Tech Stack
 
@@ -322,4 +322,4 @@ This plan records intended milestones, not a claim that all planned storage beha
 | Console/firmware loaders | ghidra-snes, gba-ghidra-loader, N64LoaderWV, ghidra_psx_ldr, ghidra-firmware-utils |
 | Threat intel output | MISP event JSON, YARA rules, SARIF findings |
 | Dashboard | Python stdlib `http.server` (`scripts/dashboard.py`, no dependencies) |
-| Report storage | SQLite tables with `LIKE` search (`output/reports.db`, `scripts/index_report.py`); no FTS5 or immutable run history yet |
+| Report storage | SQLite report history keyed idempotently by JSON path, `LIKE` for selected metadata/API/IOC/indicator fields, and FTS5 for selected report text (`output/reports.db`, `scripts/index_report.py`) |

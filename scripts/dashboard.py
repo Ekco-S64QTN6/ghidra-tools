@@ -12,6 +12,8 @@ import mimetypes
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, unquote
 
+from index_report import get_db as get_history_db, fts_phrase_query
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUTPUT_DIR = os.path.abspath(os.environ.get("GHIDRA_REPORT_OUTPUT_DIR", os.path.join(BASE_DIR, "output")))
 DB_PATH = os.path.abspath(os.environ.get("GHIDRA_REPORT_DB_PATH", os.path.join(OUTPUT_DIR, "reports.db")))
@@ -501,7 +503,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            conn = sqlite3.connect(DB_PATH)
+            # Open through the indexer so legacy databases receive the same
+            # schema/FTS migrations before dashboard search runs.
+            conn = get_history_db(DB_PATH)
             cur = conn.cursor()
             query = f"%{q}%"
 
@@ -537,6 +541,20 @@ class DashboardHandler(BaseHTTPRequestHandler):
             """, (query, query, MAX_SEARCH_ROWS))
             ind_hits = cur.fetchall()
 
+            text_hits = []
+            fts_query = fts_phrase_query(q)
+            if fts_query:
+                cur.execute("""
+                    SELECT r.file, r.risk_score, r.risk_level, r.json_path,
+                           snippet(reports_fts, 0, '[', ']', ' … ', 12)
+                    FROM reports_fts
+                    JOIN reports r ON r.id = reports_fts.rowid
+                    WHERE reports_fts MATCH ?
+                    ORDER BY bm25(reports_fts), r.timestamp DESC, r.id DESC
+                    LIMIT ?
+                """, (fts_query, MAX_SEARCH_ROWS))
+                text_hits = cur.fetchall()
+
             files = {}
 
             def add_match(filename, json_path, score, level, match):
@@ -561,6 +579,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
             for row in ind_hits:
                 add_match(row[0], row[5], row[1], row[2], f"Threat Flag: {row[4]}")
+
+            for row in text_hits:
+                add_match(row[0], row[3], row[1], row[2], f"Indexed text: {row[4]}")
 
             conn.close()
             self.send_json(files)
