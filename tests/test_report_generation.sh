@@ -115,7 +115,8 @@ pass "failed report export propagates status, cleans partial files, and preserve
 
 # A successful HTML-only export is valid even though TXT/JSON are not requested.
 HTML_DIR="$OUTPUT_DIR/html-key"
-mkdir -p "$HTML_DIR"
+mkdir -p "$HTML_DIR/.stage.abandoned"
+printf 'interrupted output\n' > "$HTML_DIR/.stage.abandoned/partial.json"
 if MOCK_REPORT_MODE=html FORMAT=html generate_report "project-html" "html-only.bin" "html-key" > "$TMP_DIR/html-visible.log" 2>&1; then
     status=0
 else
@@ -124,6 +125,7 @@ fi
 [[ "$status" -eq 0 ]] || fail "HTML-only export returned $status"
 [[ -L "$HTML_DIR/report_latest.html" ]] || fail "HTML-only report did not publish report_latest.html"
 [[ -f "$HTML_DIR/$(readlink "$HTML_DIR/report_latest.html")" ]] || fail "HTML latest symlink target missing"
+[[ ! -e "$HTML_DIR/.stage.abandoned" ]] || fail "a staging directory left by an interrupted prior run was not cleaned"
 grep -Fq "Report written:" "$TMP_DIR/html-visible.log" || fail "report filter did not display the Report written line"
 pass "HTML-only export succeeds and report-specific log lines remain visible"
 
