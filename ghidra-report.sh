@@ -28,6 +28,7 @@ OUTPUT_DIR="$SCRIPT_DIR/output"
 PROJECTS_DIR="$SCRIPT_DIR/projects"
 SCRIPTS_DIR="$SCRIPT_DIR/scripts"
 source "$SCRIPTS_DIR/batch_runner.sh"
+source "$SCRIPTS_DIR/headless_log.sh"
 
 # Ghidra Flatpak and system paths
 GHIDRA_ROOT="${GHIDRA_ROOT:-}"
@@ -206,55 +207,69 @@ import_and_analyze() {
 
     local import_log
     import_log="$(mktemp)"
+    local import_status=0
 
-    "$HEADLESS" \
+    if run_headless_logged "$import_log" import \
+        "$HEADLESS" \
         "$PROJECTS_DIR" "$project_name" \
         -import "$binary_path" \
-        "${extra_args[@]}" \
-        "${post_scripts[@]}" \
-        -analysisTimeoutPerFile 300 \
-        2>&1 | tee "$import_log" | while IFS= read -r line; do
-            if echo "$line" | grep -qE "INFO.*[Ii]mport|INFO.*[Aa]nalys|INFO.*Loaded|ERROR|WARN"; then
-                echo -e "    ${DIM}$line${NC}"
-            fi
-        done
+        "\${extra_args[@]}" \
+        "\${post_scripts[@]}" \
+        -analysisTimeoutPerFile 300; then
+        import_status=0
+    else
+        import_status=$?
+    fi
 
-    # Check if import failed (loader rejected the file)
-    if grep -q "Import failed\|No load spec found\|could not successfully load" "$import_log"; then
+    # Log text is useful to decide whether the SNES loader can fall back, but
+    # a missing/changed diagnostic must never turn a failed process into success.
+    if grep -q "Import failed\\|No load spec found\\|could not successfully load" "$import_log"; then
         if [ "$file_type" = "snes" ]; then
             log_warn "SNES ROM Loader rejected file (possibly non-standard header)."
             log_info "Falling back to raw import with 65816 processor..."
             echo ""
 
-            rm -rf "$PROJECTS_DIR/${project_name}.rep" "$PROJECTS_DIR/${project_name}.gpr"
+            rm -rf "$PROJECTS_DIR/\${project_name}.rep" "$PROJECTS_DIR/\${project_name}.gpr"
 
-            "$HEADLESS" \
+            local fallback_status=0
+            if run_headless_logged "$import_log" fallback \
+                "$HEADLESS" \
                 "$PROJECTS_DIR" "$project_name" \
                 -import "$binary_path" \
                 -processor "65816:LE:24:snes" \
-                -analysisTimeoutPerFile 300 \
-                2>&1 | tee "$import_log" | while IFS= read -r line; do
-                    if echo "$line" | grep -qE "INFO.*[Ii]mport|INFO.*[Aa]nalys|ERROR|WARN"; then
-                        echo -e "    ${DIM}$line${NC}"
-                    fi
-                done
+                -analysisTimeoutPerFile 300; then
+                fallback_status=0
+            else
+                fallback_status=$?
+            fi
 
-            if grep -q "Import failed" "$import_log"; then
-                log_error "Import failed even with raw 65816 fallback."
+            if [ "$fallback_status" -ne 0 ] || grep -q "Import failed\\|No load spec found\\|could not successfully load" "$import_log"; then
+                log_error "Import failed even with raw 65816 fallback (exit status: $fallback_status)."
                 rm -f "$import_log"
+                if [ "$fallback_status" -ne 0 ]; then
+                    return "$fallback_status"
+                fi
                 return 1
             fi
             log_success "Raw 65816 import + analysis complete."
         else
-            log_error "Import failed."
+            log_error "Import failed (headless exit status: $import_status)."
             rm -f "$import_log"
+            if [ "$import_status" -ne 0 ]; then
+                return "$import_status"
+            fi
             return 1
         fi
+    elif [ "$import_status" -ne 0 ]; then
+        log_error "Headless import + analysis exited with status $import_status."
+        rm -f "$import_log"
+        return "$import_status"
     else
         log_success "Import + analysis complete."
     fi
     rm -f "$import_log"
     echo ""
+
 }
 
 # Generate reports from an existing Ghidra project in a dedicated binary folder
