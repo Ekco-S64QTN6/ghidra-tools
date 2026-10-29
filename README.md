@@ -404,7 +404,7 @@ fixture report.
 
 ### Fast checks (no Ghidra required)
 
-These are the deterministic checks run by the default GitHub Actions workflow:
+These are the deterministic checks run by the default GitHub Actions workflow. To run the Python checks locally, install `requirements-rules.txt` and `requirements-test.txt`; the Java escaping regression also needs `javac` and `java` on `PATH`. Ghidra is not required for this lane.
 
 ```bash
 python3 -m compileall -q scripts tests
