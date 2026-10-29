@@ -119,14 +119,12 @@ class HistoryIndexerFieldTests(unittest.TestCase):
         self.assertIn("IOC [url]: https://example.invalid/history-search", query("history-search"))
         self.assertIn("Threat Flag: Synthetic indicator searchable by description", query("Synthetic indicator"))
         self.assertIn("Metadata match", query("sha-scope"))
-        self.assertIn(
-            "No matching records found",
-            query("not-indexed-recovered-string"),
-        )
-        self.assertIn(
-            "No matching records found",
-            query("not-indexed-function-symbol"),
-        )
+        recovered = query("recovered")
+        self.assertIn("Indexed text:", recovered)
+        self.assertIn("not-indexed-recovered-string", recovered)
+        function_symbol = query("not-indexed-function-symbol")
+        self.assertIn("Indexed text:", function_symbol)
+        self.assertIn("not-indexed-function-symbol", function_symbol)
 
     def test_migration_preserves_history_and_allows_same_basename(self):
         output_a = os.path.join(self.temp.name, "output", "sample_a")
@@ -234,6 +232,121 @@ class HistoryIndexerFieldTests(unittest.TestCase):
         connection = sqlite3.connect(index_report.DB_PATH)
         try:
             self.assertEqual(connection.execute("SELECT COUNT(*) FROM reports").fetchone()[0], 2)
+        finally:
+            connection.close()
+
+    def test_fts_search_text_updates_when_the_same_report_is_reindexed(self):
+        path = os.path.join(self.temp.name, "mutable-report.json")
+        value = {
+            "file": "mutable-sample.bin",
+            "format_label": "PE",
+            "generated": "2026-10-29T12:00:00Z",
+            "hashes": {"sha256": "sha-mutable"},
+            "deobfuscated_strings": [{"address": "0x401000", "value": "old recoverable beacon marker"}],
+            "top_functions": [{"name": "OldDecodePayload", "address": "0x401020"}],
+        }
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(value, handle)
+        index_report.index_report(path)
+
+        def query(term):
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                index_report.search_db(term)
+            return output.getvalue()
+
+        self.assertIn("old recoverable beacon marker", query("recoverable"))
+        self.assertIn("OldDecodePayload", query("OldDecodePayload"))
+
+        value["deobfuscated_strings"] = [{"address": "0x401000", "value": "new persistence indicator marker"}]
+        value["top_functions"] = [{"name": "NewPersistenceRoutine", "address": "0x401020"}]
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(value, handle)
+        index_report.index_report(path)
+
+        self.assertIn("new persistence indicator marker", query("persistence"))
+        self.assertIn("NewPersistenceRoutine", query("NewPersistenceRoutine"))
+        self.assertIn("No matching records found", query("beacon"))
+        self.assertIn("No matching records found", query("OldDecodePayload"))
+
+        connection = sqlite3.connect(index_report.DB_PATH)
+        try:
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM reports").fetchone()[0], 1)
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(reports)")}
+            self.assertIn("search_text", columns)
+            self.assertEqual(
+                connection.execute("SELECT COUNT(*) FROM schema_migrations WHERE name = ?",
+                                   (index_report.FTS_MIGRATION_NAME,)).fetchone()[0],
+                1,
+            )
+        finally:
+            connection.close()
+
+    def test_fts_migration_preserves_legacy_records_and_backfills_search(self):
+        # Create a pre-FTS legacy database with unique filenames, then ensure
+        # migrations run without losing prior rows or child findings.
+        legacy = sqlite3.connect(index_report.DB_PATH)
+        legacy.executescript("""
+            CREATE TABLE reports (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                file TEXT UNIQUE,
+                timestamp TEXT,
+                format_label TEXT,
+                risk_score INTEGER,
+                risk_level TEXT,
+                md5 TEXT,
+                sha256 TEXT,
+                imphash TEXT,
+                function_count INTEGER,
+                json_path TEXT
+            );
+            CREATE TABLE suspicious_apis (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                report_id INTEGER,
+                library TEXT,
+                function TEXT,
+                mitre TEXT,
+                category TEXT,
+                FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE
+            );
+            CREATE TABLE iocs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                report_id INTEGER,
+                type TEXT,
+                value TEXT,
+                address TEXT,
+                FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE
+            );
+            CREATE TABLE indicators (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                report_id INTEGER,
+                category TEXT,
+                description TEXT,
+                mitre TEXT,
+                weight INTEGER,
+                FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE
+            );
+            INSERT INTO reports VALUES
+                (1, 'legacy.bin', '2026-01-01T00:00:00Z', 'PE', 22, 'LOW',
+                 'md5-legacy', 'sha-legacy', '', 4, '/reports/legacy/legacy.json');
+            INSERT INTO suspicious_apis VALUES (1, 1, 'KERNEL32.dll', 'LegacyApi', 'T1055', 'test');
+        """)
+        legacy.commit()
+        legacy.close()
+
+        # get_db migrates the existing schema before indexing/searching. It
+        # cannot recover text that was never stored in legacy JSON rows, but
+        # must preserve identity and child records.
+        connection = index_report.get_db()
+        try:
+            row = connection.execute("SELECT id, file, search_text FROM reports").fetchone()
+            self.assertEqual(row, (1, "legacy.bin", ""))
+            self.assertEqual(
+                connection.execute("SELECT library, function FROM suspicious_apis").fetchall(),
+                [("KERNEL32.dll", "LegacyApi")],
+            )
+            self.assertEqual(connection.execute("PRAGMA foreign_key_check").fetchall(), [])
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM reports_fts").fetchone()[0], 1)
         finally:
             connection.close()
 
