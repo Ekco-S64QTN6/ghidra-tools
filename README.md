@@ -366,8 +366,12 @@ Homebrew formula and AUR `PKGBUILD` live in `packaging/`. A man page is at
 
 ### CI
 
-`.github/workflows/binary-analysis.yml` runs the regression suite and uploads the
-SARIF output to GitHub Code Scanning.
+`.github/workflows/binary-analysis.yml` runs Python compilation, CLI help, launcher
+regressions, and dashboard security tests without requiring Ghidra. It does not
+run the full Ghidra-backed integration suite or upload SARIF yet. The prior
+upload-only manual job referenced a report it never generated and ignored upload
+failures; SARIF publishing will be re-enabled when CI creates and validates a real
+fixture report.
 
 ---
 
