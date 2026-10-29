@@ -375,7 +375,7 @@ process_binary() {
 
     if [ ! -f "$binary_path" ]; then
         log_error "File not found: $binary_path"
-        exit 1
+        return 1
     fi
 
     # Analysis requires Ghidra; help and offline utility modes do not.
@@ -384,9 +384,18 @@ process_binary() {
     local binary_name
     binary_name="$(basename "$binary_path")"
     local identity_line
-    identity_line="$(python3 "$SCRIPTS_DIR/project_identity.py" identities "$binary_path" "${RUN_FINDCRYPT:-false}" "${GHIDRA_ROOT:-}")" || return $?
+    if ! identity_line="$(python3 "$SCRIPTS_DIR/project_identity.py" identities "$binary_path" "${RUN_FINDCRYPT:-false}" "${GHIDRA_ROOT:-}")"; then
+        log_error "Could not derive project/output identity for: $binary_path"
+        return 1
+    fi
     local project_name output_key
-    local IFS=
+    IFS=$'\t' read -r project_name output_key <<< "$identity_line"
+    if [ -z "$project_name" ] || [ -z "$output_key" ]; then
+        log_error "Could not derive a safe project/output identity for: $binary_path"
+        return 1
+    fi
+
+    if [ -f "$PROJECTS_DIR/${project_name}.gpr" ] && [ "$force_reimport" != "true" ]; then
         log_info "Project already exists: $project_name"
         log_info "Use --reimport to force re-import with fresh analysis."
     else
@@ -463,23 +472,23 @@ resolve_output_directory() {
     local base safe candidate
     base="$(basename "$target")"
     safe="$(printf '%s' "$base" | tr -cs 'a-zA-Z0-9_' '_' | sed 's/^_*//;s/_*$//')"
-    safe="\${safe:0:72}"
+    safe="${safe:0:72}"
     if [ -z "$safe" ]; then
         return 1
     fi
 
     local matches=()
-    for candidate in "$OUTPUT_DIR/\${safe}_"*; do
+    for candidate in "$OUTPUT_DIR/${safe}_"*; do
         if [ -d "$candidate" ] && [ -f "$candidate/report_latest.json" ]; then
             matches+=("$candidate")
         fi
     done
 
-    if [ "\${#matches[@]}" -eq 1 ]; then
-        printf '%s\n' "\${matches[0]}"
+    if [ "${#matches[@]}" -eq 1 ]; then
+        printf '%s\n' "${matches[0]}"
         return 0
     fi
-    if [ "\${#matches[@]}" -gt 1 ]; then
+    if [ "${#matches[@]}" -gt 1 ]; then
         log_error "More than one output directory matches '$target'. Use a full output path or a specific output identity."
         return 2
     fi
