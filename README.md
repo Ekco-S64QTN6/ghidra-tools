@@ -438,7 +438,7 @@ local HTTP server and cover path traversal, symlink escapes, escaped HTML values
 security headers/CSP, loopback binding, and bounded responses.
 The trace-correlation tests exercise list-shaped generic traces, CAPE process events,
 case-insensitive API matching, malformed event entries, and process-isolated attack chains.
-The history-indexer tests verify that the current report fields (`generated`, `iocs`, and indicator `mitre_id`) remain searchable in SQLite, while older field names continue to work.
+The history-indexer tests verify current/legacy report-field mapping, JSON-path idempotence, migration preservation, FTS5 matches for recovered strings and function names, and removal of stale text hits when a JSON path is re-indexed. The dashboard security suite also verifies FTS snippets retain separate same-basename output identities.
 
 ### Full Ghidra-backed integration suite
 
