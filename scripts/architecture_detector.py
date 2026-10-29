@@ -97,6 +97,14 @@ def inspect_elf(path):
             "evidence": "ELF magic present, but class/byte-order/version fields are invalid or truncated",
         }
 
+    required_size = 52 if elf_class == 1 else 64
+    if len(header) < required_size:
+        return {
+            "valid": False,
+            "processor": None,
+            "evidence": f"ELF magic present, but the ELF{32 if elf_class == 1 else 64} header is truncated",
+        }
+
     endian = "<" if data_encoding == 1 else ">"
     machine = struct.unpack(endian + "H", header[18:20])[0]
     elf_bits = 32 if elf_class == 1 else 64
@@ -212,8 +220,9 @@ def inspect_file(path):
     if elf and not elf.get("valid"):
         return {"format": "raw", "processor": None, "evidence": elf["evidence"]}
 
-    if _valid_snes_header(path, size):
-        return {"format": "snes", "processor": None, "evidence": _valid_snes_header(path, size)}
+    snes_evidence = _valid_snes_header(path, size)
+    if snes_evidence:
+        return {"format": "snes", "processor": None, "evidence": snes_evidence}
 
     gba_evidence = _valid_gba_header(path, size, extension)
     if gba_evidence:
