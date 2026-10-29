@@ -427,6 +427,9 @@ process_binary() {
         exit 1
     fi
 
+    # Analysis requires Ghidra; help and offline utility modes do not.
+    check_prereqs
+
     local binary_name
     binary_name="$(basename "$binary_path")"
     local project_name
@@ -800,7 +803,6 @@ show_help() {
 # ── Argument Parsing ──
 
 setup_dirs
-check_prereqs
 load_user_config
 
 ACTION=""
