@@ -107,6 +107,17 @@ def inspect_elf(path):
         }
 
     endian = "<" if data_encoding == 1 else ">"
+    header_version = struct.unpack_from(endian + "I", header, 20)[0]
+    expected_header_size = 52 if elf_class == 1 else 64
+    header_size_offset = 40 if elf_class == 1 else 52
+    declared_header_size = struct.unpack_from(endian + "H", header, header_size_offset)[0]
+    if header_version != 1 or declared_header_size != expected_header_size:
+        return {
+            "valid": False,
+            "processor": None,
+            "evidence": "ELF magic present, but e_version/e_ehsize do not describe a complete standard ELF header",
+        }
+
     machine = struct.unpack(endian + "H", header[18:20])[0]
     elf_bits = 32 if elf_class == 1 else 64
     processor = ELF_LANGUAGES.get(machine, {}).get((elf_class, data_encoding))
