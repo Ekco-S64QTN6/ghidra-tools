@@ -1,21 +1,21 @@
-# Maintainer: Google DeepMind Advanced Agentic Coding Pair Programmer
+# Maintainer: Not assigned (replace before submitting to AUR)
 pkgname=ghidra-report
 pkgver=0.2.0
 pkgrel=1
 pkgdesc="Automated binary analysis, threat triage, and firmware carving toolkit powered by Ghidra"
 arch=('x86_64')
-url="https://github.com/ghidra-tools/ghidra-report"
+url="https://github.com/Ekco-S64QTN6/ghidra-tools"
 license=('MIT')
-depends=('bash' 'python' 'sqlite' 'java-runtime>=21')
+depends=('bash' 'python' 'python-yaml' 'sqlite' 'java-runtime>=25')
 optdepends=(
     'ghidra: Full reverse engineering framework'
-    'python-yaml: YAML capability rule engine support'
 )
-source=("$pkgname-$pkgver.tar.gz")
+source=("$pkgname-$pkgver.tar.gz::https://github.com/Ekco-S64QTN6/ghidra-tools/archive/refs/tags/v${pkgver}.tar.gz")
+# Release tag/checksum not published yet; replace before submitting to AUR.
 sha256sums=('SKIP')
 
 package() {
-    cd "$srcdir/$pkgname-$pkgver"
+    cd "$srcdir/ghidra-tools-$pkgver"
     install -Dm755 ghidra-report.sh "$pkgdir/usr/bin/ghidra-report"
     install -Dm755 run-headless.sh "$pkgdir/usr/lib/ghidra-report/run-headless.sh"
     install -Dm644 ghidra-report.1 "$pkgdir/usr/share/man/man1/ghidra-report.1"
