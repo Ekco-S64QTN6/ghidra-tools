@@ -135,12 +135,14 @@ def _has_unique_file_index(conn):
 
 
 def _migrate_report_identity(conn):
-    """Remove the legacy UNIQUE(file) constraint while preserving report IDs and findings."""
+    """Remove the legacy UNIQUE(file) constraint and add identity/search columns."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(reports)").fetchall()}
     if _has_unique_file_index(conn):
         conn.commit()
         conn.execute("PRAGMA foreign_keys = OFF")
         try:
             conn.execute("BEGIN IMMEDIATE")
+            old_search_expr = "search_text" if "search_text" in columns else "''"
             conn.execute("""
                 CREATE TABLE reports_new (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -153,15 +155,17 @@ def _migrate_report_identity(conn):
                     sha256 TEXT,
                     imphash TEXT,
                     function_count INTEGER,
-                    json_path TEXT
+                    json_path TEXT,
+                    search_text TEXT NOT NULL DEFAULT ''
                 )
             """)
-            conn.execute("""
+            conn.execute(f"""
                 INSERT INTO reports_new
                     (id, file, timestamp, format_label, risk_score, risk_level,
-                     md5, sha256, imphash, function_count, json_path)
+                     md5, sha256, imphash, function_count, json_path, search_text)
                 SELECT id, file, timestamp, format_label, risk_score, risk_level,
-                       md5, sha256, imphash, function_count, json_path
+                       md5, sha256, imphash, function_count, json_path,
+                       {old_search_expr}
                 FROM reports
             """)
             conn.execute("DROP TABLE reports")
@@ -173,11 +177,59 @@ def _migrate_report_identity(conn):
         finally:
             conn.execute("PRAGMA foreign_keys = ON")
 
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(reports)").fetchall()}
+    if "search_text" not in columns:
+        conn.execute("ALTER TABLE reports ADD COLUMN search_text TEXT NOT NULL DEFAULT ''")
     conn.execute("""
         CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_json_path_unique
         ON reports(json_path)
     """)
 
+
+def _ensure_fts_search(conn):
+    """Create/migrate FTS5 search storage and backfill rows already in report history."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            name TEXT PRIMARY KEY,
+            applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    try:
+        conn.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS reports_fts
+            USING fts5(search_text, content='reports', content_rowid='id')
+        """)
+    except sqlite3.OperationalError as exc:
+        if "fts5" in str(exc).lower() or "no such module" in str(exc).lower():
+            raise RuntimeError(
+                "SQLite FTS5 support is required for indexed-string history search"
+            ) from exc
+        raise
+
+    conn.executescript("""
+        CREATE TRIGGER IF NOT EXISTS reports_fts_ai AFTER INSERT ON reports BEGIN
+            INSERT INTO reports_fts(rowid, search_text)
+            VALUES (new.id, new.search_text);
+        END;
+        CREATE TRIGGER IF NOT EXISTS reports_fts_ad AFTER DELETE ON reports BEGIN
+            INSERT INTO reports_fts(reports_fts, rowid, search_text)
+            VALUES ('delete', old.id, old.search_text);
+        END;
+        CREATE TRIGGER IF NOT EXISTS reports_fts_au AFTER UPDATE OF search_text ON reports BEGIN
+            INSERT INTO reports_fts(reports_fts, rowid, search_text)
+            VALUES ('delete', old.id, old.search_text);
+            INSERT INTO reports_fts(rowid, search_text)
+            VALUES (new.id, new.search_text);
+        END;
+    """)
+    migration = conn.execute(
+        "SELECT 1 FROM schema_migrations WHERE name = ?", (FTS_MIGRATION_NAME,)
+    ).fetchone()
+    if migration is None:
+        # Rebuild also backfills old metadata rows and any search_text values
+        # already present before the external-content FTS table was created.
+        conn.execute("INSERT INTO reports_fts(reports_fts) VALUES ('rebuild')")
+        conn.execute("INSERT INTO schema_migrations(name) VALUES (?)", (FTS_MIGRATION_NAME,))
 
 def _output_key_for_path(json_path, filename):
     """Use the report's containing output directory to distinguish equal basenames."""
