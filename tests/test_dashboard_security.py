@@ -104,7 +104,7 @@ class DashboardSecurityTests(unittest.TestCase):
                 id INTEGER PRIMARY KEY, file TEXT, timestamp TEXT,
                 format_label TEXT, risk_score INTEGER, risk_level TEXT,
                 md5 TEXT, sha256 TEXT, imphash TEXT, function_count INTEGER,
-                json_path TEXT
+                json_path TEXT, search_text TEXT NOT NULL DEFAULT ''
             );
             CREATE TABLE suspicious_apis (
                 id INTEGER PRIMARY KEY, report_id INTEGER, library TEXT,
@@ -120,12 +120,12 @@ class DashboardSecurityTests(unittest.TestCase):
             );
         """)
         connection.executemany(
-            "INSERT INTO reports VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO reports VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (1, "sample.bin", "2026-10-29T10:00:00Z", "PE", 70, "HIGH",
-                 "md5-a", "sha256-a", "", 10, json_path),
+                 "md5-a", "sha256-a", "", 10, json_path, "recoveredtext needlealpha"),
                 (2, "sample.bin", "2026-10-29T11:00:00Z", "ELF", 80, "HIGH",
-                 "md5-b", "sha256-b", "", 11, second_json_path),
+                 "md5-b", "sha256-b", "", 11, second_json_path, "recoveredtext needlebeta"),
             ],
         )
         connection.executemany(
@@ -150,6 +150,13 @@ class DashboardSecurityTests(unittest.TestCase):
         results = json.loads(body.decode("utf-8"))
         self.assertEqual(set(results), {output_key, second_output_key})
         self.assertEqual({result["file"] for result in results.values()}, {"sample.bin"})
+
+        status, _headers, body = self.request("/api/search?q=recoveredtext")
+        self.assertEqual(status, 200)
+        text_results = json.loads(body.decode("utf-8"))
+        self.assertEqual(set(text_results), {output_key, second_output_key})
+        self.assertTrue(all(any("Indexed text:" in match for match in item["matches"])
+                            for item in text_results.values()))
 
         status, _headers, body = self.request(f"/output/{output_key}/report_latest.json")
         self.assertEqual(status, 200)
