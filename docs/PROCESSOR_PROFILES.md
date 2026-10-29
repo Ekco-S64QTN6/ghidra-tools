@@ -6,8 +6,14 @@
 
 ## 1. Supported Architecture & Loader Ecosystem
 
-All community and bundled extensions reside in the Ghidra Flatpak Extensions directory:  
-`~/.config/ghidra/ghidra_12.1.3_FLATPAK/Extensions/`
+Community loader extensions are installed separately and are specific to the installed Ghidra release. For Flatpak, a common per-user location is
+`~/.config/ghidra/ghidra_<version>_FLATPAK/Extensions/`; replace `<version>` with the directory present on the host. Discover available extension directories with:
+
+```bash
+find ~/.config/ghidra -type d -name Extensions -print
+```
+
+The base Docker image installs Ghidra itself, not the community loaders listed below. Extension-backed paths therefore require separately installed versions compatible with the target Ghidra build; the container smoke check covers the core PE path and does not imply those optional loaders have been validated.
 
 | Platform / Architecture | Loader Class / Extension | Ghidra Language ID | Detection Signature | Key Capabilities |
 |---|---|---|---|---|
