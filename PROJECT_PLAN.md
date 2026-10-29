@@ -247,7 +247,7 @@ Make it production-ready for security workflows, CI/CD, and threat intelligence 
 - [x] **Dockerized deployment** (`Dockerfile`, `docker-compose.yml`) — container pinned to Ghidra 12.2 and Eclipse Temurin JDK 25; official Ghidra archive SHA-256 is verified during build
 - [x] **GitHub Actions workflow** (`.github/workflows/binary-analysis.yml`) — fast no-Ghidra regressions plus a pinned-container PE import/report smoke test; SARIF upload is not enabled because the workflow does not publish a repository artifact
 - [x] **Slack/Discord/webhook notifications** — configurable alerts (`--webhook <url>`) on completion or when threat score exceeds threshold
-- [x] **SQLite report index (partial)** — indexes the latest report per filename and searches filenames/hashes, suspicious APIs, IOCs, and indicators using `LIKE`; repeated filenames overwrite the earlier row. Full per-run history and FTS5 are still open in `ROADMAP.md`.
+- [x] **SQLite report index (partial)** — indexes each JSON report path idempotently and preserves distinct records for same-basename inputs, with a legacy schema migration preserving findings; search covers selected metadata, hashes, suspicious APIs, IOCs, and indicators using `LIKE` (not FTS5). FTS5 and broader string/symbol indexing remain open in `ROADMAP.md`.
 - [x] **Web dashboard** (`scripts/dashboard.py`) — standalone Python HTTP server; browse reports, use `LIKE`-based search over the indexed fields, and inspect artifacts (`--dashboard [port]`).
 - [x] **OpenCTI / Shuffle SOAR integration** (`docs/SOAR_INTEGRATION.md`) — automated webhook playbooks and MISP/SARIF ingestion guides
 
