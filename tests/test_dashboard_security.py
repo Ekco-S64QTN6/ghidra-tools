@@ -125,11 +125,16 @@ class DashboardSecurityTests(unittest.TestCase):
         )
 
     def test_exported_html_is_sandboxed_by_csp(self):
-        status, headers, body = self.request("/output/sample/report_latest.html")
-        self.assertEqual(status, 200)
-        self.assertIn("sandbox", headers.get("Content-Security-Policy", ""))
-        self.assertNotIn("script-src", headers.get("Content-Security-Policy", ""))
-        self.assertIn(b"<script>", body)
+        for target in (
+            "/output/sample/report_latest.html",
+            "/output/sample/report_latest%2ehtml",
+        ):
+            with self.subTest(target=target):
+                status, headers, body = self.request(target)
+                self.assertEqual(status, 200)
+                self.assertIn("sandbox", headers.get("Content-Security-Policy", ""))
+                self.assertNotIn("script-src", headers.get("Content-Security-Policy", ""))
+                self.assertIn(b"<script>", body)
 
     def test_search_query_length_is_bounded(self):
         status, _headers, body = self.request("/api/search?q=" + ("a" * 257))
