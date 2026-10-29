@@ -92,6 +92,42 @@ class CapabilityEngineTests(unittest.TestCase):
         count_negative = {"count": {"min": 4, "items": count_node["count"]["items"]}}
         self.assertEqual(capability_engine.evaluate_node(count_negative, self.context), (False, []))
 
+    def test_invalid_operators_primitives_and_rule_metadata_are_rejected(self):
+        invalid_rules = [
+            (
+                "name: invalid\nscope: file\nfeatures:\n  xor:\n    - api: GetTickCount\n",
+                "unsupported feature operator 'xor'",
+            ),
+            (
+                "name: invalid\nscope: file\nfeatures:\n  api: 42\n",
+                "expected a non-empty string",
+            ),
+            (
+                "name: invalid\nscope: file\nfeatures:\n  api: GetTickCount\n  indicator: network\n",
+                "exactly one operator",
+            ),
+            (
+                "name: invalid\nscope: file\nmeta:\n  weight: heavy\nfeatures:\n  api: GetTickCount\n",
+                "meta.weight must be a non-negative integer",
+            ),
+            (
+                "name: invalid\nscope: file\nunknown_field: true\nfeatures:\n  api: GetTickCount\n",
+                "unknown rule keys",
+            ),
+            (
+                "name: invalid\nscope: file\nfeatures:\n  count:\n    min: 2\n    items:\n      - api: GetTickCount\n",
+                "cannot exceed the number of items",
+            ),
+        ]
+
+        for rule_text, expected_error in invalid_rules:
+            with self.subTest(expected_error=expected_error), tempfile.TemporaryDirectory() as temp:
+                rule_path = os.path.join(temp, "invalid.yaml")
+                with open(rule_path, "w", encoding="utf-8") as handle:
+                    handle.write(rule_text)
+                with self.assertRaisesRegex(RuntimeError, expected_error):
+                    capability_engine.load_rules(temp)
+
     def test_process_injection_rule_has_positive_and_negative_examples(self):
         rules = capability_engine.load_rules(RULES_DIR)
         report = {"suspicious_apis": self.context["apis"]}
