@@ -79,10 +79,13 @@ def load_trace(trace_path):
                 for process_index, process in enumerate(behavior_processes):
                     if not isinstance(process, dict):
                         continue
-                    process_id = process.get(
-                        "process_id",
-                        process.get("pid", process.get("processid", f"process-{process_index}")),
-                    )
+                    process_id = process.get("process_id")
+                    if process_id is None:
+                        process_id = process.get("pid")
+                    if process_id is None:
+                        process_id = process.get("processid")
+                    if process_id is None:
+                        process_id = f"process-{process_index}"
                     process_name = process.get("process_name", process.get("name", ""))
                     process_calls = process.get("calls", [])
                     if not isinstance(process_calls, list):
@@ -90,9 +93,10 @@ def load_trace(trace_path):
                     for call in process_calls:
                         if isinstance(call, dict):
                             enriched = dict(call)
-                            enriched.setdefault("process_id", process_id)
-                            if process_name:
-                                enriched.setdefault("process_name", process_name)
+                            if enriched.get("process_id") is None:
+                                enriched["process_id"] = process_id
+                            if process_name and not enriched.get("process_name"):
+                                enriched["process_name"] = process_name
                             raw_calls.append(enriched)
                         elif isinstance(call, str):
                             raw_calls.append({
@@ -120,7 +124,11 @@ def load_trace(trace_path):
         if not api_name:
             continue
 
-        process_value = call_data.get("process_id", call_data.get("pid", call_data.get("processid")))
+        process_value = call_data.get("process_id")
+        if process_value is None:
+            process_value = call_data.get("pid")
+        if process_value is None:
+            process_value = call_data.get("processid")
         process_name = call_data.get("process_name", "")
         process_value_object = call_data.get("process")
         if isinstance(process_value_object, dict):
