@@ -258,9 +258,12 @@ def index_report(json_path):
     threat = data.get("threat_summary", {})
     stats = data.get("analysis_stats", {})
 
+    search_text = search_text_from_report(data)
     cur.execute("""
-        INSERT INTO reports (file, timestamp, format_label, risk_score, risk_level, md5, sha256, imphash, function_count, json_path)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO reports
+            (file, timestamp, format_label, risk_score, risk_level, md5, sha256,
+             imphash, function_count, json_path, search_text)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(json_path) DO UPDATE SET
             file=excluded.file,
             timestamp=excluded.timestamp,
@@ -270,7 +273,8 @@ def index_report(json_path):
             md5=excluded.md5,
             sha256=excluded.sha256,
             imphash=excluded.imphash,
-            function_count=excluded.function_count
+            function_count=excluded.function_count,
+            search_text=excluded.search_text
     """, (
         filename,
         timestamp,
@@ -281,7 +285,8 @@ def index_report(json_path):
         hashes.get("sha256", ""),
         hashes.get("imphash", ""),
         stats.get("function_count", 0),
-        json_path
+        json_path,
+        search_text,
     ))
     
     cur.execute("SELECT id FROM reports WHERE json_path = ?", (json_path,))
@@ -378,7 +383,21 @@ def search_db(query):
     """, (q, q))
     ind_hits = cur.fetchall()
 
-    total_hits = len(report_hits) + len(api_hits) + len(ioc_hits) + len(ind_hits)
+    text_hits = []
+    fts_query = fts_phrase_query(query)
+    if fts_query:
+        cur.execute("""
+            SELECT r.id, r.file, r.risk_score, r.risk_level, r.json_path,
+                   snippet(reports_fts, 0, '[', ']', ' … ', 12)
+            FROM reports_fts
+            JOIN reports r ON r.id = reports_fts.rowid
+            WHERE reports_fts MATCH ?
+            ORDER BY bm25(reports_fts), r.timestamp DESC, r.id DESC
+            LIMIT 100
+        """, (fts_query,))
+        text_hits = cur.fetchall()
+
+    total_hits = len(report_hits) + len(api_hits) + len(ioc_hits) + len(ind_hits) + len(text_hits)
     if total_hits == 0:
         print("  No matching records found across historical analysis reports.\n")
         conn.close()
@@ -411,6 +430,9 @@ def search_db(query):
 
     for row in ind_hits:
         add_match(row[1], row[6], row[2], row[3], f"Threat Flag: {row[4]}")
+
+    for row in text_hits:
+        add_match(row[1], row[4], row[2], row[3], f"Indexed text: {row[5]}")
 
     for output_key, info in files.items():
         print(f"\n  Target Binary: {info['file']}  [Output: {output_key}]  [Risk: {info['score']}/100 - {info['level']}]")
