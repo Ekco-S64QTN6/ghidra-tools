@@ -227,9 +227,10 @@ import_and_analyze() {
         import_status=$?
     fi
 
-    # Log text is useful to decide whether the SNES loader can fall back, but
-    # a missing/changed diagnostic must never turn a failed process into success.
-    if grep -Eq "Import failed|No load spec found|could not successfully load" "$import_log"; then
+    # Diagnostic text varies across Ghidra versions and optional loaders.
+    # For SNES, any nonzero loader attempt also triggers raw 65816 fallback;
+    # a missing/changed message must not suppress the documented recovery path.
+    if grep -Eq "Import failed|No load spec found|could not successfully load" "$import_log" || { [ "$file_type" = "snes" ] && [ "$import_status" -ne 0 ]; }; then
         if [ "$file_type" = "snes" ]; then
             log_warn "SNES ROM Loader rejected file (possibly non-standard header)."
             log_info "Falling back to raw import with 65816 processor..."
