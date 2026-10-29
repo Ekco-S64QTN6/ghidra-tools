@@ -354,6 +354,14 @@ generate_report() {
             local staged_file="${report_base}.${ext}"
             if [ -f "$staged_file" ]; then
                 local final_file="$file_output_dir/$(basename "$staged_file")"
+                if [ -e "$final_file" ] || [ -L "$final_file" ]; then
+                    for published_file in "${published_files[@]}"; do
+                        rm -f "$published_file"
+                    done
+                    rm -rf "$stage_dir"
+                    log_error "Refusing to overwrite an existing immutable report artifact: $(basename "$final_file")"
+                    return 1
+                fi
                 if ! mv "$staged_file" "$final_file"; then
                     for published_file in "${published_files[@]}"; do
                         rm -f "$published_file"
