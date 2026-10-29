@@ -31,8 +31,86 @@ def load_yaml_rule(filepath):
         return yaml.safe_load(f)
 
 
+SUPPORTED_FEATURE_OPERATORS = {
+    "and", "or", "not", "count", "api", "indicator", "section_name", "section_rwx", "ioc"
+}
+SUPPORTED_SCOPES = {"instruction", "block", "function", "file"}
+RULE_KEYS = {"name", "namespace", "scope", "meta", "features"}
+META_KEYS = {"att&ck", "mbc", "weight", "description"}
+
+
+def validate_feature_node(node, node_path="features"):
+    """Validate a feature expression before it reaches the evaluator."""
+    if not isinstance(node, dict) or len(node) != 1:
+        raise ValueError(f"{node_path}: expected a mapping with exactly one operator")
+
+    operator, value = next(iter(node.items()))
+    if operator not in SUPPORTED_FEATURE_OPERATORS:
+        raise ValueError(f"{node_path}: unsupported feature operator {operator!r}")
+
+    if operator in ("and", "or"):
+        if not isinstance(value, list) or not value:
+            raise ValueError(f"{node_path}.{operator}: expected a non-empty list")
+        for index, child in enumerate(value):
+            validate_feature_node(child, f"{node_path}.{operator}[{index}]")
+    elif operator == "not":
+        validate_feature_node(value, f"{node_path}.not")
+    elif operator == "count":
+        if not isinstance(value, dict):
+            raise ValueError(f"{node_path}.count: expected a mapping with 'min' and 'items'")
+        unknown = set(value) - {"min", "items"}
+        if unknown:
+            raise ValueError(f"{node_path}.count: unknown keys {sorted(unknown)!r}")
+        minimum = value.get("min", 1)
+        items = value.get("items")
+        if isinstance(minimum, bool) or not isinstance(minimum, int) or minimum < 1:
+            raise ValueError(f"{node_path}.count.min: expected a positive integer")
+        if not isinstance(items, list) or not items:
+            raise ValueError(f"{node_path}.count.items: expected a non-empty list")
+        if minimum > len(items):
+            raise ValueError(f"{node_path}.count.min: cannot exceed the number of items")
+        for index, child in enumerate(items):
+            validate_feature_node(child, f"{node_path}.count.items[{index}]")
+    elif operator == "section_rwx":
+        if not isinstance(value, bool):
+            raise ValueError(f"{node_path}.section_rwx: expected true or false")
+    elif not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{node_path}.{operator}: expected a non-empty string")
+
+
+def validate_rule(rule, rule_path):
+    """Validate the supported rule metadata and expression shape."""
+    if not isinstance(rule, dict):
+        raise ValueError("expected a YAML mapping")
+    unknown = set(rule) - RULE_KEYS
+    if unknown:
+        raise ValueError(f"unknown rule keys: {sorted(unknown)!r}")
+    if not isinstance(rule.get("name"), str) or not rule["name"].strip():
+        raise ValueError("missing non-empty 'name'")
+    if "namespace" in rule and not isinstance(rule["namespace"], str):
+        raise ValueError("'namespace' must be a string")
+    scope = rule.get("scope", "file")
+    if scope not in SUPPORTED_SCOPES:
+        raise ValueError(f"unsupported scope {scope!r}")
+    meta = rule.get("meta", {})
+    if not isinstance(meta, dict):
+        raise ValueError("'meta' must be a mapping")
+    unknown_meta = set(meta) - META_KEYS
+    if unknown_meta:
+        raise ValueError(f"unknown meta keys: {sorted(unknown_meta)!r}")
+    for key in ("att&ck", "mbc", "description"):
+        if key in meta and not isinstance(meta[key], str):
+            raise ValueError(f"meta.{key} must be a string")
+    weight = meta.get("weight", 10)
+    if isinstance(weight, bool) or not isinstance(weight, int) or weight < 0:
+        raise ValueError("meta.weight must be a non-negative integer")
+    if "features" not in rule:
+        raise ValueError("missing 'features' expression")
+    validate_feature_node(rule["features"])
+
+
 def load_rules(rules_dir):
-    """Load and validate the minimum structure of every rule or fail closed."""
+    """Load all rules, failing closed if any rule has invalid syntax or structure."""
     require_yaml()
     paths = []
     for ext in ("*.yaml", "*.yml"):
@@ -42,16 +120,9 @@ def load_rules(rules_dir):
     for path in sorted(paths):
         try:
             rule = load_yaml_rule(path)
+            validate_rule(rule, path)
         except Exception as exc:
             raise RuntimeError(f"Failed to load capability rule {path}: {exc}") from exc
-
-        if not isinstance(rule, dict):
-            raise RuntimeError(f"Invalid capability rule {path}: expected a YAML mapping.")
-        if not isinstance(rule.get("name"), str) or not rule["name"].strip():
-            raise RuntimeError(f"Invalid capability rule {path}: missing non-empty 'name'.")
-        if "features" not in rule or not isinstance(rule["features"], dict):
-            raise RuntimeError(f"Invalid capability rule {path}: missing mapping-valued 'features'.")
-
         rule["_filepath"] = path
         rules.append(rule)
 
