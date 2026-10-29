@@ -29,6 +29,9 @@ jobs:
       - name: Compile Python sources and tests
         run: python3 -m compileall -q scripts tests
 
+      - name: Test validated file and processor detection
+        run: python3 tests/test_architecture_detector.py
+
       - name: Smoke-test CLI help without a Ghidra install
         run: ./ghidra-report.sh --help >/dev/null
 
