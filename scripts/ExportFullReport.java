@@ -9,6 +9,8 @@
 
 import ghidra.app.script.GhidraScript;
 import ghidra.app.cmd.function.NewFunctionStackAnalysisCmd;
+import ghidra.program.model.pcode.PcodeOp;
+import ghidra.program.model.pcode.Varnode;
 import lib.ApiTagger;
 import lib.DecompilerExporter;
 import lib.EmulatorDeobfuscator;
@@ -383,6 +385,64 @@ public class ExportFullReport extends GhidraScript {
                 println("[!] Ghidra stack-reference analysis was incomplete; stack-string recovery may be limited.");
             }
         }
+        // Temporary CI probe for stack-reference and P-code varnode matching.
+        FunctionIterator probeFunctions = fm.getFunctions(true);
+        while (probeFunctions.hasNext()) {
+            Function probeFunction = probeFunctions.next();
+            InstructionIterator probeInstructions =
+                    listing.getInstructions(probeFunction.getBody(), true);
+            while (probeInstructions.hasNext()) {
+                Instruction probeInstruction = probeInstructions.next();
+                Reference[] probeReferences = probeInstruction.getReferencesFrom();
+                boolean hasStackWrite = false;
+                for (Reference reference : probeReferences) {
+                    if (reference instanceof StackReference && reference.getReferenceType().isWrite()) {
+                        hasStackWrite = true;
+                        StackReference stackReference = (StackReference) reference;
+                        println("[STACK-PROBE] ref operand=" + reference.getOperandIndex()
+                                + " write=" + reference.getReferenceType().isWrite()
+                                + " offset=" + stackReference.getStackOffset()
+                                + " operandWrites=" + ghidra.program.model.lang.OperandType.doesWrite(
+                                        probeInstruction.getOperandType(reference.getOperandIndex())));
+                    } else if (reference.isStackReference()) {
+                        println("[STACK-PROBE] non-StackReference class=" + reference.getClass()
+                                + " operand=" + reference.getOperandIndex()
+                                + " type=" + reference.getReferenceType());
+                    }
+                }
+                if (!hasStackWrite) continue;
+                println("[STACK-PROBE] instruction=" + probeInstruction.getAddress()
+                        + " " + probeInstruction);
+                PcodeOp[] probeOps = probeInstruction.getPcode();
+                if (probeOps == null) continue;
+                for (PcodeOp probeOp : probeOps) {
+                    Varnode output = probeOp.getOutput();
+                    println("[STACK-PROBE] op=" + probeOp
+                            + " output=" + output
+                            + " outputAddress=" + (output == null ? null : output.getAddress())
+                            + " outputSize=" + (output == null ? -1 : output.getSize()));
+                    if (probeOp.getOpcode() != PcodeOp.STORE || probeOp.getNumInputs() < 3) continue;
+                    Varnode value = probeOp.getInput(2);
+                    println("[STACK-PROBE] storeValue=" + value
+                            + " address=" + value.getAddress() + " size=" + value.getSize()
+                            + " space=" + value.getAddress().getAddressSpace().getName()
+                            + " constant=" + value.isConstant());
+                    for (PcodeOp candidate : probeOps) {
+                        if (candidate == probeOp) break;
+                        Varnode candidateOutput = candidate.getOutput();
+                        boolean matches = candidateOutput != null
+                                && candidateOutput.getSize() == value.getSize()
+                                && candidateOutput.getAddress().equals(value.getAddress());
+                        println("[STACK-PROBE] candidate=" + candidate
+                                + " candidateOutput=" + candidateOutput
+                                + " candidateAddress=" + (candidateOutput == null ? null : candidateOutput.getAddress())
+                                + " candidateSize=" + (candidateOutput == null ? -1 : candidateOutput.getSize())
+                                + " matches=" + matches);
+                    }
+                }
+            }
+        }
+
         FunctionIterator funcs = fm.getFunctions(true);
 
         while (funcs.hasNext()) {
