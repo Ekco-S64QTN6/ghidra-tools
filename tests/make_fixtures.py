@@ -123,6 +123,7 @@ def _build_text(iat_rva_base):
     code += b"\x55\x8b\xec"              # push ebp; mov ebp, esp
     code += b"\x83\xec\x10"              # sub esp, 0x10
     code += b"\xb8\x41\x41\x41\x41"      # mov eax, "AAAA" (register-immediate decoy)
+    code += b"\x89\x45\xf0"              # [ebp-16] = eax (register-derived stack-store decoy)
     code += b"\xbb\x74\x65\x73\x74"      # mov ebx, "test" (register-immediate decoy)
     code += b"\xc7\x45\xf8\x41\x42\x43\x44"  # [ebp-8] = "ABCD"
     code += b"\xc7\x45\xfc\x45\x46\x47\x48"  # [ebp-4] = "EFGH"

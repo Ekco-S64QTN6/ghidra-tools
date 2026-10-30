@@ -9,8 +9,6 @@
 
 import ghidra.app.script.GhidraScript;
 import ghidra.app.cmd.function.NewFunctionStackAnalysisCmd;
-import ghidra.program.model.pcode.PcodeOp;
-import ghidra.program.model.pcode.Varnode;
 import lib.ApiTagger;
 import lib.DecompilerExporter;
 import lib.EmulatorDeobfuscator;
@@ -385,47 +383,6 @@ public class ExportFullReport extends GhidraScript {
                 println("[!] Ghidra stack-reference analysis was incomplete; stack-string recovery may be limited.");
             }
         }
-        // Temporary CI probe: capture the exact P-code definition of stack-store values.
-        FunctionIterator probeFunctions = fm.getFunctions(true);
-        while (probeFunctions.hasNext()) {
-            Function probeFunction = probeFunctions.next();
-            InstructionIterator probeInstructions =
-                    listing.getInstructions(probeFunction.getBody(), true);
-            while (probeInstructions.hasNext()) {
-                Instruction probeInstruction = probeInstructions.next();
-                boolean hasStackWrite = false;
-                for (Reference reference : probeInstruction.getReferencesFrom()) {
-                    if (reference.isStackReference() && reference.getReferenceType().isWrite()) {
-                        hasStackWrite = true;
-                        break;
-                    }
-                }
-                if (!hasStackWrite) continue;
-                println("[STACK-PROBE] instruction=" + probeInstruction.getAddress()
-                        + " " + probeInstruction);
-                PcodeOp[] probeOps = probeInstruction.getPcode();
-                if (probeOps == null) continue;
-                for (PcodeOp probeOp : probeOps) {
-                    println("[STACK-PROBE] pcode=" + probeOp);
-                    if (probeOp.getOpcode() == PcodeOp.STORE && probeOp.getNumInputs() >= 3) {
-                        Varnode value = probeOp.getInput(2);
-                        PcodeOp definition = value.getDef();
-                        println("[STACK-PROBE] store-value=" + value
-                                + " constant=" + value.isConstant()
-                                + " definition=" + definition);
-                        if (definition != null) {
-                            for (int input = 0; input < definition.getNumInputs(); input++) {
-                                Varnode source = definition.getInput(input);
-                                println("[STACK-PROBE] definition-input[" + input + "]=" + source
-                                        + " constant=" + source.isConstant()
-                                        + " definition=" + source.getDef());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         FunctionIterator funcs = fm.getFunctions(true);
 
         while (funcs.hasNext()) {

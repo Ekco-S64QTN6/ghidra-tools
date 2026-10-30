@@ -148,9 +148,9 @@ assert all(item.get("stack_offset_end", 0) - item.get("stack_offset_start", 0) =
 assert not any(item.get("value") in {"AAAA", "test"} for item in strings), strings
 PYSTACK
 then
-    log_pass "Stack-string recovery requires contiguous constant stack writes and rejects register-immediate decoys"
+    log_pass "Stack-string recovery requires contiguous constant stack writes and rejects register-derived stack stores"
 else
-    log_fail "Stack-string evidence was missing, non-contiguous, or included register-immediate decoys"
+    log_fail "Stack-string evidence was missing, non-contiguous, or included register-derived false positives"
 fi
 
 # Validate MISP JSON schema

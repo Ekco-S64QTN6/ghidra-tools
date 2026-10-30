@@ -18,7 +18,7 @@ import java.util.List;
  *
  * Unlike a mnemonic-only scan, a candidate must have:
  * - a Ghidra stack reference on a write operand;
- * - a P-code STORE whose stored value is a constant;
+ * - a P-code STORE whose value is constant or defined by one direct COPY from a constant;
  * - a one-to-eight-byte store containing printable ASCII; and
  * - a stack offset contiguous with the previous store in instruction order.
  *
@@ -151,7 +151,7 @@ public class StackStringDetector {
         // Ghidra may lower MOV [stack], immediate into a temporary COPY followed
         // by STORE. Follow exactly one COPY, and only when its source is constant;
         // do not chase register values or multi-step data flow.
-        Varnode storedValue = resolveConstantStoreValue(store.getInput(2));
+        Varnode storedValue = resolveConstantStoreValue(store, pcode);
         if (storedValue == null) return null;
 
         int size = storedValue.getSize();
@@ -164,21 +164,47 @@ public class StackStringDetector {
         );
         if (!isPrintable(bytes)) return null;
 
-        return new StackWrite(stackWrites.get(0).getStackOffset(), bytes);
+        int stackOffset = stackWrites.get(0).getStackOffset();
+        if ((long) stackOffset + bytes.length > Integer.MAX_VALUE) return null;
+        return new StackWrite(stackOffset, bytes);
     }
 
-    private static Varnode resolveConstantStoreValue(Varnode value) {
-        if (value == null) return null;
-        if (value.isConstant()) return value;
+    private static Varnode resolveConstantStoreValue(PcodeOp store, PcodeOp[] operations) {
+        if (store == null || store.getNumInputs() != 3) return null;
 
-        PcodeOp definition = value.getDef();
+        Varnode value = store.getInput(2);
+        if (value == null || value.isConstant()) return value;
+
+        // Ghidra's instruction P-code contains the COPY output used by STORE,
+        // but the STORE input's Varnode.getDef() is not populated. Resolve the
+        // definition within this instruction by matching storage and size.
+        PcodeOp definition = null;
+        for (PcodeOp operation : operations) {
+            if (operation == null) continue;
+            if (operation == store) break;
+
+            Varnode output = operation.getOutput();
+            if (!sameVarnode(output, value)) continue;
+            if (definition != null) return null;
+            definition = operation;
+        }
+
         if (definition == null || definition.getOpcode() != PcodeOp.COPY
                 || definition.getNumInputs() != 1) {
             return null;
         }
 
         Varnode source = definition.getInput(0);
-        return source != null && source.isConstant() ? source : null;
+        if (source == null || !source.isConstant() || source.getSize() != value.getSize()) {
+            return null;
+        }
+        return source;
+    }
+
+    private static boolean sameVarnode(Varnode left, Varnode right) {
+        return left != null && right != null
+                && left.getSize() == right.getSize()
+                && left.getAddress().equals(right.getAddress());
     }
 
     private static byte[] constantBytes(long value, int size, boolean bigEndian) {
