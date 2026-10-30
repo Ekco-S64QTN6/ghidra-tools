@@ -434,8 +434,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
         username, separator, supplied_token = credentials.partition(":")
         if not separator:
             return False
-        username_valid = hmac.compare_digest(username, self.AUTH_USERNAME)
-        token_valid = hmac.compare_digest(supplied_token, self.REMOTE_AUTH_TOKEN)
+        username_valid = hmac.compare_digest(username.encode("utf-8"), self.AUTH_USERNAME.encode("utf-8"))
+        token_valid = hmac.compare_digest(
+            supplied_token.encode("utf-8"), self.REMOTE_AUTH_TOKEN.encode("utf-8")
+        )
         return username_valid and token_valid
 
     def _send_authentication_required(self):

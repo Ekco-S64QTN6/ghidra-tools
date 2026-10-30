@@ -102,7 +102,6 @@ class DashboardSecurityTests(unittest.TestCase):
                     self.assertIn("Basic", headers.get("WWW-Authenticate", ""))
                     self.assertEqual(headers.get("Cache-Control"), "no-store")
                     self.assertEqual(headers.get("X-Content-Type-Options"), "nosniff")
-        self.assertEqual(headers.get("Cache-Control"), "no-store")
                     self.assertIn(b"Authentication required", body)
 
             credentials = base64.b64encode(
@@ -147,6 +146,7 @@ class DashboardSecurityTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(body, b'{"ok": true}')
         self.assertEqual(headers.get("X-Content-Type-Options"), "nosniff")
+        self.assertEqual(headers.get("Cache-Control"), "no-store")
 
     def test_report_and_search_apis_use_the_indexed_output_identity(self):
         output_key = "sample_bin_1234567890_abcdef123456"
