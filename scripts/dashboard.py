@@ -434,7 +434,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         username, separator, supplied_token = credentials.partition(":")
         if not separator:
             return False
-        username_valid = hmac.compare_digest(username.encode("utf-8"), self.AUTH_USERNAME.encode("utf-8"))
+        username_valid = hmac.compare_digest(
+            username.encode("utf-8"), self.AUTH_USERNAME.encode("utf-8")
+        )
         token_valid = hmac.compare_digest(
             supplied_token.encode("utf-8"), self.REMOTE_AUTH_TOKEN.encode("utf-8")
         )
@@ -447,7 +449,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             'Basic realm="ghidra-report", charset="UTF-8"',
         )
         self.send_header("Content-Type", "text/plain; charset=utf-8")
-        body = b"Authentication required.\\n"
+        body = b"Authentication required.\n"
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
