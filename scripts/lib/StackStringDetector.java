@@ -120,21 +120,6 @@ public class StackStringDetector {
         String mnemonic = instruction.getMnemonicString().toUpperCase();
         if (!mnemonic.startsWith("MOV") && !mnemonic.startsWith("STR")) return null;
 
-        System.out.println("[STACK-DEBUG] " + instruction.getAddress() + " " + instruction);
-        for (Reference reference : instruction.getReferencesFrom()) {
-            System.out.println("[STACK-DEBUG] REF class=" + reference.getClass().getName()
-                    + " stack=" + reference.isStackReference()
-                    + " type=" + reference.getReferenceType()
-                    + " operand=" + reference.getOperandIndex()
-                    + " value=" + reference);
-        }
-        PcodeOp[] debugPcode = instruction.getPcode();
-        if (debugPcode != null) {
-            for (PcodeOp operation : debugPcode) {
-                System.out.println("[STACK-DEBUG] PCODE " + operation);
-            }
-        }
-
         List<StackReference> stackWrites = new ArrayList<>();
         for (Reference reference : instruction.getReferencesFrom()) {
             if (!(reference instanceof StackReference)
