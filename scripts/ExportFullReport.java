@@ -51,6 +51,7 @@ public class ExportFullReport extends GhidraScript {
 
         data.program = currentProgram;
         data.formatLabel = detectFormatLabel();
+        loadDetectionProvenance();
         data.isSnes = isSNES();
 
         analyzeMemoryAndEntropy();
@@ -71,6 +72,35 @@ public class ExportFullReport extends GhidraScript {
                 outputFormats,
                 data,
                 this::println);
+    }
+
+    private void loadDetectionProvenance() {
+        String detectedFormat = environmentValue("GHIDRA_DETECTED_FORMAT");
+        if (detectedFormat == null) {
+            return;
+        }
+
+        ReportModel.DetectionInfo info = new ReportModel.DetectionInfo();
+        info.detectedFormat = detectedFormat;
+        info.evidence = environmentValue("GHIDRA_DETECTION_EVIDENCE");
+        info.processorLanguageId = environmentValue("GHIDRA_DETECTED_PROCESSOR");
+        info.selectedProcessorLanguageId = environmentValue("GHIDRA_SELECTED_PROCESSOR");
+        info.requestedLoader = environmentValue("GHIDRA_REQUESTED_LOADER");
+        info.importStrategy = environmentValue("GHIDRA_IMPORT_STRATEGY");
+        String flags = environmentValue("GHIDRA_DETECTION_ELF_FLAGS");
+        if (flags != null) {
+            try {
+                info.elfFlags = Long.parseLong(flags);
+            } catch (NumberFormatException e) {
+                println("[!] Ignoring invalid ELF e_flags value supplied by detector metadata.");
+            }
+        }
+        data.detection = info;
+    }
+
+    private String environmentValue(String name) {
+        String value = System.getenv(name);
+        return (value == null || value.isEmpty()) ? null : value;
     }
 
     private void parseArguments() {

@@ -96,7 +96,7 @@ import sys
 
 source_path, output_path = sys.argv[1:]
 source = open(source_path, encoding="utf-8").read()
-start = source.find("import_and_analyze() {")
+start = source.find("set_detection_provenance() {")
 end = source.find("\n# Generate reports from an existing Ghidra project", start)
 if start < 0 or end < 0:
     raise SystemExit("could not isolate import_and_analyze()")
@@ -147,6 +147,26 @@ while IFS=$'\t' read -r fixture expected_format expected_processor; do
     actual_format="$(detect_file_type "$fixture")"
     [[ "$actual_format" == "$expected_format" ]] || fail \
         "$(basename "$fixture"): expected format $expected_format, got $actual_format"
+    [[ "$DETECTED_FORMAT" == "$expected_format" ]] || fail \
+        "$(basename "$fixture"): provenance format is $DETECTED_FORMAT, expected $expected_format"
+    if [[ "$expected_processor" == "none" ]]; then
+        [[ -z "$DETECTED_PROCESSOR" && -z "$SELECTED_PROCESSOR" ]] || fail \
+            "$(basename "$fixture"): unexpected detector/selected processor provenance"
+        if [[ "$expected_format" == "elf" ]]; then
+            [[ "$IMPORT_STRATEGY" == "detector_deferred" ]] || fail \
+                "$(basename "$fixture"): expected detector_deferred strategy, got $IMPORT_STRATEGY"
+        else
+            [[ "$IMPORT_STRATEGY" == "ghidra_default" ]] || fail \
+                "$(basename "$fixture"): expected ghidra_default strategy, got $IMPORT_STRATEGY"
+        fi
+    else
+        [[ "$DETECTED_PROCESSOR" == "$expected_processor" ]] || fail \
+            "$(basename "$fixture"): detector processor provenance mismatch"
+        [[ "$SELECTED_PROCESSOR" == "$expected_processor" ]] || fail \
+            "$(basename "$fixture"): selected processor provenance mismatch"
+        [[ "$IMPORT_STRATEGY" == "explicit_processor" ]] || fail \
+            "$(basename "$fixture"): expected explicit_processor strategy, got $IMPORT_STRATEGY"
+    fi
 
     python3 - "$ARG_LOG" "$expected_processor" "$fixture" "$SCRIPTS_DIR/architecture_detector.py" <<'PYASSERT'
 import json

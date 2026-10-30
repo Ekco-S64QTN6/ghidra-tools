@@ -28,6 +28,9 @@ public class JsonReportWriter {
             out.println("  \"schema_version\": \"1.0.0\",");
             out.println("  \"format\": \"" + escapeJson(p.getExecutableFormat()) + "\",");
             out.println("  \"format_label\": \"" + escapeJson(d.formatLabel) + "\",");
+            if (d.detection != null) {
+                writeDetection(out, d.detection);
+            }
             out.println("  \"generated\": \"" + new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX").format(new Date()) + "\",");
             out.println("  \"hashes\": {");
             out.println("    \"md5\": \"" + escapeJson(p.getExecutableMD5()) + "\",");
@@ -106,6 +109,22 @@ public class JsonReportWriter {
             }
             out.println("}");
         }
+    }
+
+    private static void writeDetection(PrintWriter out, ReportModel.DetectionInfo detection) {
+        out.println("  \"detection\": {");
+        out.println("    \"detected_format\": \"" + escapeJson(detection.detectedFormat) + "\",");
+        out.println("    \"evidence\": " + nullableJsonString(detection.evidence) + ",");
+        out.println("    \"processor_language_id\": " + nullableJsonString(detection.processorLanguageId) + ",");
+        out.println("    \"selected_processor_language_id\": " + nullableJsonString(detection.selectedProcessorLanguageId) + ",");
+        out.println("    \"requested_loader\": " + nullableJsonString(detection.requestedLoader) + ",");
+        out.println("    \"import_strategy\": " + nullableJsonString(detection.importStrategy) + ",");
+        out.println("    \"elf_flags\": " + (detection.elfFlags != null ? detection.elfFlags : "null"));
+        out.println("  },");
+    }
+
+    private static String nullableJsonString(String value) {
+        return value == null ? "null" : "\"" + escapeJson(value) + "\"";
     }
 
     private static void writeSnesSection(PrintWriter out, ReportModel.ReportData d) {

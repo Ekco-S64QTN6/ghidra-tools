@@ -40,6 +40,21 @@ with open(report_path, encoding="utf-8") as handle:
     report = json.load(handle)
 architecture = report.get("architecture", {})
 actual = architecture.get("language_id")
+detection = report.get("detection", {})
+if detection.get("detected_format") != "elf":
+    raise SystemExit(f"{name}: expected detector format 'elf', got {detection.get('detected_format')!r}")
+if detection.get("evidence", "").find("ELF") < 0:
+    raise SystemExit(f"{name}: detector evidence does not describe the ELF header")
+if detection.get("processor_language_id") != expected_language:
+    raise SystemExit(f"{name}: detector processor mismatch: {detection.get('processor_language_id')!r}")
+if detection.get("selected_processor_language_id") != expected_language:
+    raise SystemExit(f"{name}: processor request mismatch: {detection.get('selected_processor_language_id')!r}")
+if detection.get("requested_loader") is not None:
+    raise SystemExit(f"{name}: ELF import should not request a format loader")
+if detection.get("import_strategy") != "explicit_processor":
+    raise SystemExit(f"{name}: expected explicit_processor, got {detection.get('import_strategy')!r}")
+if not isinstance(detection.get("elf_flags"), int):
+    raise SystemExit(f"{name}: expected numeric ELF flags, got {detection.get('elf_flags')!r}")
 if report.get("format") != "Executable and Linking Format (ELF)":
     raise SystemExit(f"{name}: expected ELF loader, got format={report.get('format')!r}")
 if actual != expected_language:

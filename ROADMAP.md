@@ -112,6 +112,8 @@ These findings come from source inspection, not a successful execution of the pr
 
 A second integration gate now builds 15 tiny synthetic ELF executables and imports each through the real Ghidra 12.2 ELF loader. The test reads each produced JSON report and asserts its `architecture.language_id` equals the expected language, covering x86, ARM (LE/BE/BE8), AArch64, MIPS32, RISC-V32/64, and PowerPC32/64 in both supported byte orders. This establishes actual loader selection and report evidence rather than merely checking the `-processor` invocation. MIPS64, big-endian RISC-V, unknown architectures, and optional console/community loaders remain deliberately deferred.
 
+**Incremental progress — 2026-10-30:** The primary JSON report now carries an optional `detection` object with the detector's normalized format, human-readable evidence, recommended processor, processor explicitly passed to Ghidra, requested console loader, import strategy (including deferred and reused-project cases), and ELF `e_flags` when present. These values are handed to the exporter per process, so parallel batch imports cannot share metadata accidentally. The existing `architecture.language_id` remains the authoritative language Ghidra actually opened. The schema keeps `detection` optional, preserving validation for older v1 reports and direct exporter integrations that do not provide detector metadata; fast dispatch regressions and real PE/ELF container imports assert the distinction.
+
 
 ### 1.2 Upgrade the YAML capability engine from prototype to a real rule system
 

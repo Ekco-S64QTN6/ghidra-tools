@@ -148,6 +148,70 @@ detect_elf_arch() {
     python3 "$SCRIPTS_DIR/architecture_detector.py" arch "$1"
 }
 
+# Per-invocation detector and import-selection provenance, exported to the report writer.
+DETECTED_FORMAT=""
+DETECTION_EVIDENCE=""
+DETECTED_PROCESSOR=""
+DETECTION_ELF_FLAGS=""
+SELECTED_PROCESSOR=""
+REQUESTED_LOADER=""
+IMPORT_STRATEGY="ghidra_default"
+
+set_detection_provenance() {
+    local binary_path="$1"
+    local detector_json
+    if ! detector_json="$(python3 "$SCRIPTS_DIR/architecture_detector.py" json "$binary_path")"; then
+        log_error "Could not collect architecture-detection evidence for: $binary_path"
+        return 1
+    fi
+
+    local values=()
+    mapfile -t values < <(python3 - "$detector_json" <<'PYDETECTION'
+import json
+import sys
+
+result = json.loads(sys.argv[1])
+for key in ("format", "evidence", "processor", "e_flags"):
+    value = result.get(key)
+    print("" if value is None else value)
+PYDETECTION
+)
+    DETECTED_FORMAT="${values[0]:-raw}"
+    DETECTION_EVIDENCE="${values[1]:-no detector evidence available}"
+    DETECTED_PROCESSOR="${values[2]:-}"
+    DETECTION_ELF_FLAGS="${values[3]:-}"
+    SELECTED_PROCESSOR=""
+    REQUESTED_LOADER=""
+    IMPORT_STRATEGY="ghidra_default"
+
+    case "$DETECTED_FORMAT" in
+        snes)
+            REQUESTED_LOADER="SnesRomLoader"
+            IMPORT_STRATEGY="explicit_loader"
+            ;;
+        gba)
+            REQUESTED_LOADER="GBALoader"
+            IMPORT_STRATEGY="explicit_loader"
+            ;;
+        n64)
+            REQUESTED_LOADER="N64LoaderWVLoader"
+            IMPORT_STRATEGY="explicit_loader"
+            ;;
+        psx)
+            REQUESTED_LOADER="PsxLoader"
+            IMPORT_STRATEGY="explicit_loader"
+            ;;
+        elf)
+            if [ -n "$DETECTED_PROCESSOR" ]; then
+                SELECTED_PROCESSOR="$DETECTED_PROCESSOR"
+                IMPORT_STRATEGY="explicit_processor"
+            else
+                IMPORT_STRATEGY="detector_deferred"
+            fi
+            ;;
+    esac
+}
+
 # Generate a project name from a binary path
 project_name_for() {
     local file="$1"
@@ -166,39 +230,37 @@ import_and_analyze() {
     if [ -z "$project_name" ]; then
         project_name="$(project_name_for "$binary_path")" || return $?
     fi
-    local file_type
-    file_type="$(detect_file_type "$binary_path")"
+    set_detection_provenance "$binary_path" || return $?
+    local file_type="$DETECTED_FORMAT"
 
     log_step "Importing: ${BOLD}$(basename "$binary_path")${NC} → project: ${BOLD}$project_name${NC}"
 
     local extra_args=()
-    local detection_evidence
-    detection_evidence="$(python3 "$SCRIPTS_DIR/architecture_detector.py" evidence "$binary_path")"
+    local detection_evidence="$DETECTION_EVIDENCE"
     log_info "Detection evidence: $detection_evidence"
     case "$file_type" in
         snes)
-            log_info "SNES ROM detected — attempting import with SnesRomLoader..."
-            extra_args+=(-loader "SnesRomLoader")
+            log_info "SNES ROM detected — attempting import with ${REQUESTED_LOADER}..."
+            extra_args+=(-loader "$REQUESTED_LOADER")
             ;;
         gba)
-            log_info "Game Boy Advance ROM detected — attempting import with GBALoader..."
-            extra_args+=(-loader "GBALoader")
+            log_info "Game Boy Advance ROM detected — attempting import with ${REQUESTED_LOADER}..."
+            extra_args+=(-loader "$REQUESTED_LOADER")
             ;;
         n64)
-            log_info "Nintendo 64 ROM detected — attempting import with N64LoaderWVLoader..."
-            extra_args+=(-loader "N64LoaderWVLoader")
+            log_info "Nintendo 64 ROM detected — attempting import with ${REQUESTED_LOADER}..."
+            extra_args+=(-loader "$REQUESTED_LOADER")
             ;;
         psx)
-            log_info "PlayStation executable detected — attempting import with PsxLoader..."
-            extra_args+=(-loader "PsxLoader")
+            log_info "PlayStation executable detected — attempting import with ${REQUESTED_LOADER}..."
+            extra_args+=(-loader "$REQUESTED_LOADER")
             ;;
         pe)
             log_info "PE executable detected"
             ;;
         elf)
             log_info "ELF binary detected"
-            local elf_arch
-            elf_arch="$(detect_elf_arch "$binary_path")"
+            local elf_arch="$SELECTED_PROCESSOR"
             if [ -n "$elf_arch" ]; then
                 log_info "ELF processor selected: ${BOLD}$elf_arch${NC}"
                 extra_args+=(-processor "$elf_arch")
@@ -260,6 +322,8 @@ import_and_analyze() {
 
             rm -rf "$PROJECTS_DIR/${project_name}.rep" "$PROJECTS_DIR/${project_name}.gpr"
 
+            SELECTED_PROCESSOR="65816:LE:24:snes"
+            IMPORT_STRATEGY="raw_processor_fallback"
             local fallback_status=0
             if run_headless_logged "$import_log" fallback \
                 "$HEADLESS" \
@@ -341,7 +405,14 @@ generate_report() {
 
     local report_log report_status=0
     report_log="$(mktemp)"
-    if run_headless_logged "$report_log" report \
+    if GHIDRA_DETECTED_FORMAT="${DETECTED_FORMAT:-raw}" \
+        GHIDRA_DETECTION_EVIDENCE="${DETECTION_EVIDENCE:-}" \
+        GHIDRA_DETECTED_PROCESSOR="${DETECTED_PROCESSOR:-}" \
+        GHIDRA_SELECTED_PROCESSOR="${SELECTED_PROCESSOR:-}" \
+        GHIDRA_REQUESTED_LOADER="${REQUESTED_LOADER:-}" \
+        GHIDRA_IMPORT_STRATEGY="${IMPORT_STRATEGY:-ghidra_default}" \
+        GHIDRA_DETECTION_ELF_FLAGS="${DETECTION_ELF_FLAGS:-}" \
+        run_headless_logged "$report_log" report \
         "$HEADLESS" \
         "$PROJECTS_DIR" "$project_name" \
         -process "$binary_name" \
@@ -502,10 +573,19 @@ process_binary() {
     # Preserve lock cleanup even if errexit exits the shell during analysis.
     trap 'release_output_lock' EXIT
 
+    if ! set_detection_provenance "$binary_path"; then
+        release_output_lock
+        trap - EXIT
+        return 1
+    fi
+
     local process_status=0
     if [ -f "$PROJECTS_DIR/${project_name}.gpr" ] && [ "$force_reimport" != "true" ]; then
         log_info "Project already exists: $project_name"
         log_info "Use --reimport to force re-import with fresh analysis."
+        SELECTED_PROCESSOR=""
+        REQUESTED_LOADER=""
+        IMPORT_STRATEGY="existing_project_reused"
     else
         if ! import_and_analyze "$binary_path" "$project_name"; then
             log_error "Skipping report generation due to import failure."
