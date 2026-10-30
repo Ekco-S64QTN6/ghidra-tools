@@ -12,8 +12,8 @@ Two fixtures are produced:
   packed_sample.dll  A minimal but structurally valid PE32 DLL carrying every
                      signal the threat engine scores on: a .themida RWX section,
                      a maximum-entropy .boot section, both x86 GetPC shellcode
-                     idioms, an immediate-built stack string plus register-immediate
-                     decoys, and a real import table of ATT&CK-tagged APIs.
+                     idioms, an immediate-built stack string plus register-immediate and non-contiguous
+                     stack-store decoys, and a real import table of ATT&CK-tagged APIs.
 
   console_sample.sfc A 64 KB LoROM SNES cartridge with a checksum-valid header
                      and 65816 code touching >10 distinct PPU MMIO registers
@@ -125,6 +125,7 @@ def _build_text(iat_rva_base):
     code += b"\xb8\x41\x41\x41\x41"      # mov eax, "AAAA" (register-immediate decoy)
     code += b"\x89\x45\xf0"              # [ebp-16] = eax (register-derived stack-store decoy)
     code += b"\xbb\x74\x65\x73\x74"      # mov ebx, "test" (register-immediate decoy)
+    code += b"\\x66\\xc7\\x45\\xec\\x59\\x5a"  # [ebp-20] = "YZ" (non-contiguous stack-store decoy)
     code += b"\xc7\x45\xf8\x41\x42\x43\x44"  # [ebp-8] = "ABCD"
     code += b"\xc7\x45\xfc\x45\x46\x47\x48"  # [ebp-4] = "EFGH"
     code += b"\xe8\x00\x00\x00\x00"      # call $+5      ─┐ GetPC idiom #1

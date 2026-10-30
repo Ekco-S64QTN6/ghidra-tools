@@ -145,12 +145,12 @@ assert matches, strings
 assert all(item.get("method") == "contiguous_stack_immediate_stores" for item in matches), matches
 assert all(item.get("function") and item.get("address") and item.get("evidence") for item in matches), matches
 assert all(item.get("stack_offset_end", 0) - item.get("stack_offset_start", 0) == 8 for item in matches), matches
-assert not any(item.get("value") in {"AAAA", "test"} for item in strings), strings
+assert not any(item.get("value") in {"AAAA", "test", "YZ", "YZABCDEFGH"} for item in strings), strings
 PYSTACK
 then
-    log_pass "Stack-string recovery requires contiguous constant stack writes and rejects register-derived stack stores"
+    log_pass "Stack-string recovery requires contiguous constant stack writes and rejects register-derived/non-contiguous decoys"
 else
-    log_fail "Stack-string evidence was missing, non-contiguous, or included register-derived false positives"
+    log_fail "Stack-string evidence was missing, non-contiguous, or included stack-store false positives"
 fi
 
 # Validate MISP JSON schema
