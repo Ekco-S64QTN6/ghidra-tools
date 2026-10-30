@@ -375,27 +375,55 @@ public class ExportFullReport extends GhidraScript {
 
             Set<Function> called = f.getCalledFunctions(monitor);
             fs.callCount = (called != null) ? called.size() : 0;
+            Set<String> recordedApiCalls = new HashSet<>();
 
             InstructionIterator instrs = listing.getInstructions(f.getBody(), true);
             long iCount = 0;
-            int suspCount = 0;
             while (instrs.hasNext()) {
                 Instruction instr = instrs.next();
                 iCount++;
                 data.totalDisassembledBytes += instr.getLength();
+
+                if (!instr.getFlowType().isCall()) continue;
                 for (int op = 0; op < instr.getNumOperands(); op++) {
                     for (Object obj : instr.getOpObjects(op)) {
-                        if (obj instanceof Address) {
-                            Function targetF = fm.getFunctionAt((Address) obj);
-                            if (targetF != null && ApiTagger.isSuspicious(targetF.getName())) {
-                                suspCount++;
+                        if (!(obj instanceof Address)) continue;
+                        Address targetAddress = (Address) obj;
+                        Function targetF = fm.getFunctionAt(targetAddress);
+                        if (targetF != null) {
+                            recordFunctionApiCall(targetF.getName(), targetF.getEntryPoint().toString(),
+                                    instr.getAddress(), fs, recordedApiCalls);
+                        } else {
+                            Symbol targetSymbol = currentProgram.getSymbolTable().getPrimarySymbol(targetAddress);
+                            if (targetSymbol != null) {
+                                String apiName = targetSymbol.getName();
+                                if (apiName.startsWith("__imp_")) apiName = apiName.substring(6);
+                                recordFunctionApiCall(apiName, targetAddress.toString(),
+                                        instr.getAddress(), fs, recordedApiCalls);
                             }
                         }
                     }
                 }
             }
+
+            // Call-graph references also resolve external functions reached through thunks.
+            if (called != null) {
+                for (Function targetF : called) {
+                    if (targetF == null || !ApiTagger.isSuspicious(targetF.getName())) continue;
+                    Reference[] apiRefs = getReferencesTo(targetF.getEntryPoint());
+                    if (apiRefs == null) continue;
+                    for (Reference apiRef : apiRefs) {
+                        Address callSite = apiRef.getFromAddress();
+                        if (f.getBody().contains(callSite) && apiRef.getReferenceType().isCall()) {
+                            recordFunctionApiCall(targetF.getName(), targetF.getEntryPoint().toString(),
+                                    callSite, fs, recordedApiCalls);
+                        }
+                    }
+                }
+            }
+
             fs.instructionCount = iCount;
-            fs.suspiciousApiCallCount = suspCount;
+            fs.suspiciousApiCallCount = fs.suspiciousApis.size();
 
             // Priority scoring heuristic
             fs.score = (fs.refCount * 3) + (fs.callCount * 2) + (fs.suspiciousApiCallCount * 20) + (int) Math.min(20, fs.instructionCount / 10);
@@ -415,6 +443,24 @@ public class ExportFullReport extends GhidraScript {
         if (data.totalInitializedBytes > 0) {
             data.codeCoverage = (data.totalDisassembledBytes * 100.0) / data.totalInitializedBytes;
         }
+    }
+
+    private void recordFunctionApiCall(
+            String apiName,
+            String targetAddress,
+            Address callSite,
+            FunctionScore score,
+            Set<String> recorded
+    ) {
+        if (apiName == null || !ApiTagger.isSuspicious(apiName)) return;
+        String callAddress = callSite.toString();
+        if (!recorded.add(targetAddress + "|" + callAddress + "|" + apiName)) return;
+
+        ReportModel.FunctionApiCall evidence = new ReportModel.FunctionApiCall();
+        evidence.function = apiName;
+        evidence.targetAddress = targetAddress;
+        evidence.callSite = callAddress;
+        score.suspiciousApis.add(evidence);
     }
 
     // --- P-Code Emulation Deobfuscation ---

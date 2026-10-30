@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-capability_engine.py — Small, file-aggregate capability rule engine for ghidra-report.
-This DSL is intentionally not capa-compatible. Rules evaluate fields available in
-the generated JSON report; they do not match individual instructions, blocks, or functions.
+capability_engine.py — File-aggregate and API-only function capability rules.
+This project-specific DSL is not capa-compatible. File rules inspect aggregate
+report fields; function rules inspect resolved suspicious API calls within one
+function. Arbitrary instruction and basic-block expressions are not implemented.
 """
 
 import os
@@ -38,27 +39,34 @@ SUPPORTED_FEATURE_OPERATORS = {
 RULE_SCHEMA_VERSION = "1.0.0"
 RULE_ID_PATTERN = re.compile(r"^ghidra\.[a-z0-9]+(?:-[a-z0-9]+)*$")
 ATTACK_ID_PATTERN = re.compile(r"^T[0-9]{4}(?:\.[0-9]{3})?$")
-SUPPORTED_SCOPES = {"file"}
+SUPPORTED_SCOPES = {"file", "function"}
+FUNCTION_FEATURE_OPERATORS = {"and", "or", "not", "count", "api"}
 RULE_KEYS = {"schema_version", "id", "name", "namespace", "scope", "meta", "features"}
 META_KEYS = {"att&ck", "mbc", "weight", "description", "rationale", "references"}
 
 
-def validate_feature_node(node, node_path="features"):
-    """Validate a feature expression before it reaches the evaluator."""
+def validate_feature_node(
+    node,
+    node_path="features",
+    allowed_operators=None,
+    function_scope=False,
+):
+    """Validate one feature expression, optionally restricted to function-local data."""
     if not isinstance(node, dict) or len(node) != 1:
         raise ValueError(f"{node_path}: expected a mapping with exactly one operator")
 
     operator, value = next(iter(node.items()))
-    if operator not in SUPPORTED_FEATURE_OPERATORS:
-        raise ValueError(f"{node_path}: unsupported feature operator {operator!r}")
+    allowed = SUPPORTED_FEATURE_OPERATORS if allowed_operators is None else allowed_operators
+    if operator not in allowed:
+        raise ValueError(f"{node_path}: unsupported feature operator {operator!r} for this scope")
 
     if operator in ("and", "or"):
         if not isinstance(value, list) or not value:
             raise ValueError(f"{node_path}.{operator}: expected a non-empty list")
         for index, child in enumerate(value):
-            validate_feature_node(child, f"{node_path}.{operator}[{index}]")
+            validate_feature_node(child, f"{node_path}.{operator}[{index}]", allowed, function_scope)
     elif operator == "not":
-        validate_feature_node(value, f"{node_path}.not")
+        validate_feature_node(value, f"{node_path}.not", allowed, function_scope)
     elif operator == "count":
         if not isinstance(value, dict):
             raise ValueError(f"{node_path}.count: expected a mapping with 'min' and 'items'")
@@ -74,12 +82,16 @@ def validate_feature_node(node, node_path="features"):
         if minimum > len(items):
             raise ValueError(f"{node_path}.count.min: cannot exceed the number of items")
         for index, child in enumerate(items):
-            validate_feature_node(child, f"{node_path}.count.items[{index}]")
+            validate_feature_node(child, f"{node_path}.count.items[{index}]", allowed, function_scope)
     elif operator == "section_rwx":
         if not isinstance(value, bool):
             raise ValueError(f"{node_path}.section_rwx: expected true or false")
     elif not isinstance(value, str) or not value.strip():
         raise ValueError(f"{node_path}.{operator}: expected a non-empty string")
+    elif operator == "api" and function_scope and "!" in value:
+        raise ValueError(
+            f"{node_path}.api: function scope accepts unqualified API names only"
+        )
 
 
 def validate_rule(rule, rule_path):
@@ -100,9 +112,7 @@ def validate_rule(rule, rule_path):
         raise ValueError("missing non-empty 'namespace'")
     scope = rule.get("scope")
     if scope not in SUPPORTED_SCOPES:
-        raise ValueError(
-            f"unsupported scope {scope!r}; this engine evaluates file-aggregate report fields only"
-        )
+        raise ValueError(f"unsupported scope {scope!r}; supported scopes are file and function")
     meta = rule.get("meta")
     if not isinstance(meta, dict):
         raise ValueError("'meta' must be a mapping")
@@ -132,7 +142,12 @@ def validate_rule(rule, rule_path):
             raise ValueError(f"meta.references[{index}] must be an HTTPS URL")
     if "features" not in rule:
         raise ValueError("missing 'features' expression")
-    validate_feature_node(rule["features"])
+    allowed_operators = FUNCTION_FEATURE_OPERATORS if scope == "function" else SUPPORTED_FEATURE_OPERATORS
+    validate_feature_node(
+        rule["features"],
+        allowed_operators=allowed_operators,
+        function_scope=(scope == "function"),
+    )
 
 
 def load_rules(rules_dir):
@@ -208,15 +223,20 @@ def evaluate_node(node, context):
             return True, ev_list
         return False, []
 
-    # Primitive match: api
+    # Primitive match: api (aggregate import or function-local call-site evidence).
     if "api" in node:
         target_api = node["api"].lower()
+        matched = []
         for api in context.get("apis", []):
-            fn = api.get("function", "").lower()
-            lib = api.get("library", "").lower()
+            fn = (api.get("function") or "").lower()
+            lib = (api.get("library") or "").lower()
             if target_api == fn or (lib and target_api == f"{lib}!{fn}".lower()):
-                return True, [f"API: {api.get('library')}!{api.get('function')}"]
-        return False, []
+                label = f"API: {lib + '!' if lib else ''}{api.get('function')}"
+                call_site = api.get("call_site")
+                if call_site:
+                    label += f" @ {call_site}"
+                matched.append(label)
+        return bool(matched), matched
 
     # Primitive match: indicator
     if "indicator" in node:
@@ -265,29 +285,50 @@ def evaluate_report(report_data, rules):
     }
 
     matches = []
-    for r in rules:
-        feat = r.get("features", {})
-        matched, evidence = evaluate_node(feat, context)
-        if matched:
-            meta = r.get("meta", {})
-            matches.append({
-                "id": r["id"],
+    for rule in rules:
+        feature = rule.get("features", {})
+        scope = rule.get("scope", "file")
+        if scope == "function":
+            evaluation_contexts = [
+                (
+                    function,
+                    {"apis": function.get("suspicious_apis", [])},
+                )
+                for function in report_data.get("function_api_evidence", [])
+            ]
+        else:
+            evaluation_contexts = [(None, context)]
+
+        for function, evaluation_context in evaluation_contexts:
+            matched, evidence = evaluate_node(feature, evaluation_context)
+            if not matched:
+                continue
+
+            meta = rule.get("meta", {})
+            result = {
+                "id": rule["id"],
                 "rule_schema_version": RULE_SCHEMA_VERSION,
-                "name": r.get("name"),
-                "namespace": r.get("namespace", "uncategorized"),
-                "scope": "file",
-                "evidence_quality": "file_aggregate",
+                "name": rule.get("name"),
+                "namespace": rule.get("namespace", "uncategorized"),
+                "scope": scope,
+                "evidence_quality": "function_callsite" if function is not None else "file_aggregate",
                 "att&ck": meta.get("att&ck", "-"),
                 "mbc": meta.get("mbc", "-"),
                 "weight": meta.get("weight", 10),
                 "description": meta.get("description", ""),
                 "rationale": meta.get("rationale", ""),
                 "references": list(meta.get("references", [])),
-                "expression": feat,
-                "evidence": list(dict.fromkeys(evidence)) # deduplicate
-            })
+                "expression": feature,
+                "evidence": list(dict.fromkeys(evidence)),
+            }
+            if function is not None:
+                result["function"] = {
+                    "name": function.get("function"),
+                    "address": function.get("address"),
+                }
+            matches.append(result)
 
-    matches.sort(key=lambda m: m["weight"], reverse=True)
+    matches.sort(key=lambda match: match["weight"], reverse=True)
     return matches
 
 def print_matches_table(filepath, matches):

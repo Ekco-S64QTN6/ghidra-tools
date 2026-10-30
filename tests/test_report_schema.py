@@ -65,6 +65,27 @@ def main():
     }
     validator.validate(detection_report)
 
+    function_report = sample_report()
+    function_report["function_api_evidence"] = [{
+        "function": "entry",
+        "address": "0x401000",
+        "suspicious_apis": [{
+            "function": "GetModuleHandleA",
+            "target_address": "EXTERNAL::GetModuleHandleA",
+            "call_site": "0x401010",
+        }],
+    }]
+    validator.validate(function_report)
+
+    malformed_function_evidence = copy.deepcopy(function_report)
+    malformed_function_evidence["function_api_evidence"][0]["suspicious_apis"][0]["call_site"] = 123
+    try:
+        validator.validate(malformed_function_evidence)
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("schema unexpectedly accepted a non-string function call-site")
+
     malformed_detection = copy.deepcopy(detection_report)
     malformed_detection["detection"]["elf_flags"] = "0x0"
     try:

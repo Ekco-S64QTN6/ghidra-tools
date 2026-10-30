@@ -37,12 +37,28 @@ def api(name):
     return {"library": "KERNEL32.dll", "function": name}
 
 
-def report(apis=None, indicators=None, blocks=None, iocs=None):
+def function_record(name, address, api_names):
+    return {
+        "function": name,
+        "address": address,
+        "suspicious_apis": [
+            {
+                "function": api_name,
+                "target_address": f"EXTERNAL::{api_name}",
+                "call_site": f"{address}+0x10",
+            }
+            for api_name in api_names
+        ],
+    }
+
+
+def report(apis=None, indicators=None, blocks=None, iocs=None, function_api_evidence=None):
     return {
         "suspicious_apis": list(apis or []),
         "threat_summary": {"indicators": list(indicators or [])},
         "memory_blocks": list(blocks or []),
         "iocs": list(iocs or []),
+        "function_api_evidence": list(function_api_evidence or []),
     }
 
 
@@ -74,7 +90,7 @@ class CapabilityEngineTests(unittest.TestCase):
                 self.assertIn("_filepath", rule)
                 serializable_rule = {key: value for key, value in rule.items() if key != "_filepath"}
                 validator.validate(serializable_rule)
-                self.assertEqual(rule["scope"], "file")
+                self.assertIn(rule["scope"], {"file", "function"})
                 self.assertTrue(rule["meta"]["rationale"])
                 self.assertTrue(rule["meta"]["references"])
 
@@ -84,6 +100,16 @@ class CapabilityEngineTests(unittest.TestCase):
         validator.validate({
             key: value for key, value in count_rule.items() if key != "_filepath"
         })
+
+        function_rule = next(
+            rule for rule in rules if rule["scope"] == "function"
+        )
+        invalid_function_rule = {
+            key: value for key, value in function_rule.items() if key != "_filepath"
+        }
+        invalid_function_rule["features"] = {"api": "KERNEL32.dll!VirtualAllocEx"}
+        with self.assertRaises(ValidationError):
+            validator.validate(invalid_function_rule)
 
     def test_missing_pyyaml_fails_instead_of_silently_loading_zero_rules(self):
         with patch.object(capability_engine, "yaml", None):
@@ -179,8 +205,18 @@ class CapabilityEngineTests(unittest.TestCase):
                 "meta.weight must be an integer from 0 through 100",
             ),
             (
-                RULE_HEADER.replace('scope: "file"', 'scope: "function"') + "features:\n  api: GetTickCount\n",
-                "file-aggregate report fields only",
+                RULE_HEADER.replace('scope: "file"', 'scope: "instruction"') + "features:\n  api: GetTickCount\n",
+                "supported scopes are file and function",
+            ),
+            (
+                RULE_HEADER.replace('scope: "file"', 'scope: "function"')
+                + "features:\n  indicator: injection\n",
+                "unsupported feature operator 'indicator' for this scope",
+            ),
+            (
+                RULE_HEADER.replace('scope: "file"', 'scope: "function"')
+                + "features:\n  api: KERNEL32.dll!VirtualAllocEx\n",
+                "function scope accepts unqualified API names only",
             ),
             (
                 RULE_HEADER.replace('schema_version: "1.0.0"', 'schema_version: "2.0.0"')
@@ -277,8 +313,12 @@ class CapabilityEngineTests(unittest.TestCase):
                 report([api("NtUnmapViewOfSection"), api("SetThreadContext")]),
             ),
             "ghidra.process-injection-memory-modification": (
-                report([api("VirtualAllocEx"), api("WriteProcessMemory")]),
-                report([api("VirtualAllocEx")]),
+                report(function_api_evidence=[
+                    function_record("inject_payload", "0x401000", ["VirtualAllocEx", "WriteProcessMemory"])
+                ]),
+                report(function_api_evidence=[
+                    function_record("allocate_only", "0x402000", ["VirtualAllocEx"])
+                ]),
             ),
         }
         self.assertEqual(set(fixtures), {rule["id"] for rule in rules})
@@ -294,26 +334,40 @@ class CapabilityEngineTests(unittest.TestCase):
         rules = capability_engine.load_rules(str(RULES_DIR))
         injection = next(rule for rule in rules if rule["id"] == "ghidra.process-injection-memory-modification")
         hits = capability_engine.evaluate_report(
-            {"suspicious_apis": self.context["apis"]},
+            {
+                "suspicious_apis": self.context["apis"],
+                "function_api_evidence": [
+                    function_record("inject_payload", "0x401000", ["VirtualAllocEx", "WriteProcessMemory"])
+                ],
+            },
             [injection],
         )
         self.assertEqual(len(hits), 1)
         hit = hits[0]
         self.assertEqual(hit["id"], injection["id"])
         self.assertEqual(hit["rule_schema_version"], "1.0.0")
-        self.assertEqual(hit["scope"], "file")
-        self.assertEqual(hit["evidence_quality"], "file_aggregate")
+        self.assertEqual(hit["scope"], "function")
+        self.assertEqual(hit["evidence_quality"], "function_callsite")
+        self.assertEqual(hit["function"], {"name": "inject_payload", "address": "0x401000"})
         self.assertEqual(hit["expression"], injection["features"])
+        self.assertTrue(any("@ 0x401000+0x10" in item for item in hit["evidence"]))
         self.assertTrue(hit["rationale"])
         self.assertTrue(hit["references"])
 
-    def test_process_injection_rule_keeps_a_negative_control(self):
+    def test_function_scope_does_not_combine_apis_across_functions_or_use_file_imports(self):
         rules = capability_engine.load_rules(str(RULES_DIR))
         injection = next(rule for rule in rules if rule["id"] == "ghidra.process-injection-memory-modification")
-        positive = report([api("VirtualAllocEx"), api("WriteProcessMemory")])
-        negative = report([api("GetTickCount")])
+        positive = report(function_api_evidence=[
+            function_record("inject_payload", "0x401000", ["VirtualAllocEx", "WriteProcessMemory"])
+        ])
+        split_calls = report(function_api_evidence=[
+            function_record("allocate", "0x401000", ["VirtualAllocEx"]),
+            function_record("write", "0x402000", ["WriteProcessMemory"]),
+        ])
+        aggregate_only = report(apis=[api("VirtualAllocEx"), api("WriteProcessMemory")])
         self.assertEqual(len(capability_engine.evaluate_report(positive, [injection])), 1)
-        self.assertEqual(capability_engine.evaluate_report(negative, [injection]), [])
+        self.assertEqual(capability_engine.evaluate_report(split_calls, [injection]), [])
+        self.assertEqual(capability_engine.evaluate_report(aggregate_only, [injection]), [])
 
 
 if __name__ == "__main__":

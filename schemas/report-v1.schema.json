@@ -101,22 +101,40 @@
           "type": "string"
         },
         "evidence": {
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "processor_language_id": {
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "selected_processor_language_id": {
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "requested_loader": {
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "import_strategy": {
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "elf_flags": {
-          "type": ["integer", "null"]
+          "type": [
+            "integer",
+            "null"
+          ]
         }
       },
       "additionalProperties": true
@@ -456,6 +474,49 @@
         }
       },
       "additionalProperties": true
+    },
+    "function_api_evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "function",
+          "address",
+          "suspicious_apis"
+        ],
+        "properties": {
+          "function": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "suspicious_apis": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "function",
+                "target_address",
+                "call_site"
+              ],
+              "properties": {
+                "function": {
+                  "type": "string"
+                },
+                "target_address": {
+                  "type": "string"
+                },
+                "call_site": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": true
+      }
     }
   },
   "additionalProperties": true

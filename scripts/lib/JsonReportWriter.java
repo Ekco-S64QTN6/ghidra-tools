@@ -87,6 +87,30 @@ public class JsonReportWriter {
             }
             out.println("  ],");
 
+            out.println("  \"function_api_evidence\": [");
+            List<ReportModel.FunctionScore> apiEvidenceFunctions = new ArrayList<>();
+            for (ReportModel.FunctionScore fs : d.prioritizedFunctions) {
+                if (!fs.suspiciousApis.isEmpty()) apiEvidenceFunctions.add(fs);
+            }
+            for (int i = 0; i < apiEvidenceFunctions.size(); i++) {
+                ReportModel.FunctionScore fs = apiEvidenceFunctions.get(i);
+                out.println("    {");
+                out.println("      \"function\": \"" + escapeJson(fs.function.getName()) + "\",");
+                out.println("      \"address\": \"" + escapeJson(fs.function.getEntryPoint().toString()) + "\",");
+                out.println("      \"suspicious_apis\": [");
+                for (int j = 0; j < fs.suspiciousApis.size(); j++) {
+                    ReportModel.FunctionApiCall api = fs.suspiciousApis.get(j);
+                    out.print("        {\"function\": \"" + escapeJson(api.function)
+                            + "\", \"target_address\": \"" + escapeJson(api.targetAddress)
+                            + "\", \"call_site\": \"" + escapeJson(api.callSite) + "\"}");
+                    out.println(j < fs.suspiciousApis.size() - 1 ? "," : "");
+                }
+                out.println("      ]");
+                out.print("    }");
+                out.println(i < apiEvidenceFunctions.size() - 1 ? "," : "");
+            }
+            out.println("  ],");
+
             out.println("  \"top_functions\": [");
             int fLimit = Math.min(10, d.prioritizedFunctions.size());
             for (int i = 0; i < fLimit; i++) {
