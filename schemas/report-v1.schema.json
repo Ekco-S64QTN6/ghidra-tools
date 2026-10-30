@@ -517,6 +517,53 @@
         },
         "additionalProperties": true
       }
+    },
+    "stack_strings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "address",
+          "function",
+          "method",
+          "value",
+          "byte_count",
+          "stack_offset_start",
+          "stack_offset_end",
+          "evidence"
+        ],
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "function": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string",
+            "minLength": 1
+          },
+          "value": {
+            "type": "string",
+            "minLength": 4
+          },
+          "byte_count": {
+            "type": "integer",
+            "minimum": 4
+          },
+          "stack_offset_start": {
+            "type": "integer"
+          },
+          "stack_offset_end": {
+            "type": "integer"
+          },
+          "evidence": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": true
+      }
     }
   },
   "additionalProperties": true
