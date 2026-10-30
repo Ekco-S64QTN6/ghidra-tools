@@ -573,14 +573,13 @@ process_binary() {
     # Preserve lock cleanup even if errexit exits the shell during analysis.
     trap 'release_output_lock' EXIT
 
-    if ! set_detection_provenance "$binary_path"; then
-        release_output_lock
-        trap - EXIT
-        return 1
-    fi
-
     local process_status=0
     if [ -f "$PROJECTS_DIR/${project_name}.gpr" ] && [ "$force_reimport" != "true" ]; then
+        if ! set_detection_provenance "$binary_path"; then
+            release_output_lock
+            trap - EXIT
+            return 1
+        fi
         log_info "Project already exists: $project_name"
         log_info "Use --reimport to force re-import with fresh analysis."
         SELECTED_PROCESSOR=""
