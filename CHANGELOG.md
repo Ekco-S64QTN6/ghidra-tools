@@ -16,6 +16,7 @@ All notable changes to this project are documented here.
 - Preserve detector evidence, recommended and explicitly requested processor IDs, requested loaders, import strategy, and ELF flags in an additive optional JSON `detection` object; assert the provenance against real PE/ELF reports.
 
 ### Fixed
+- Resolve immediate stack-store values through exactly one P-code `COPY` from a constant when Ghidra materializes a memory-immediate move through a temporary; continue rejecting register-derived and multi-step values.
 - Use exact case-insensitive API-name matching in capability rules instead of potentially overbroad substring matching.
 - Select Ghidra's mixed-endian ARM language for ELF32 big-endian files carrying `EF_ARM_BE8`, rather than forcing the pure big-endian instruction language.
 - Update FindCrypt's cancellation polling to Ghidra 12.2's `TaskMonitor.checkCancelled()` API so the full Java pipeline compiles against the pinned runtime.

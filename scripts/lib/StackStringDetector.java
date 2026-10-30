@@ -128,7 +128,7 @@ public class StackStringDetector {
             }
 
             int operandIndex = reference.getOperandIndex();
-            if (operandIndex < 0 || operandIndex >= instruction.getNumOperands()) continue;
+            if (operandIndex != 0 || operandIndex >= instruction.getNumOperands()) continue;
             if (!ghidra.program.model.lang.OperandType.doesWrite(
                     instruction.getOperandType(operandIndex))) {
                 continue;
@@ -140,30 +140,45 @@ public class StackStringDetector {
         PcodeOp[] pcode = instruction.getPcode();
         if (pcode == null || pcode.length == 0) return null;
 
-        StackWrite candidate = null;
+        PcodeOp store = null;
         for (PcodeOp operation : pcode) {
-            if (operation == null || operation.getOpcode() != PcodeOp.STORE
-                    || operation.getNumInputs() < 3) {
-                continue;
-            }
-
-            Varnode storedValue = operation.getInput(2);
-            if (storedValue == null || !storedValue.isConstant()) continue;
-
-            int size = storedValue.getSize();
-            if (size < 1 || size > MAX_STORE_BYTES) continue;
-
-            byte[] bytes = constantBytes(
-                    storedValue.getOffset(),
-                    size,
-                    instruction.getProgram().getLanguage().isBigEndian()
-            );
-            if (!isPrintable(bytes)) continue;
-
-            if (candidate != null) return null;
-            candidate = new StackWrite(stackWrites.get(0).getStackOffset(), bytes);
+            if (operation == null || operation.getOpcode() != PcodeOp.STORE) continue;
+            if (store != null || operation.getNumInputs() != 3) return null;
+            store = operation;
         }
-        return candidate;
+        if (store == null) return null;
+
+        // Ghidra may lower MOV [stack], immediate into a temporary COPY followed
+        // by STORE. Follow exactly one COPY, and only when its source is constant;
+        // do not chase register values or multi-step data flow.
+        Varnode storedValue = resolveConstantStoreValue(store.getInput(2));
+        if (storedValue == null) return null;
+
+        int size = storedValue.getSize();
+        if (size < 1 || size > MAX_STORE_BYTES) return null;
+
+        byte[] bytes = constantBytes(
+                storedValue.getOffset(),
+                size,
+                instruction.getProgram().getLanguage().isBigEndian()
+        );
+        if (!isPrintable(bytes)) return null;
+
+        return new StackWrite(stackWrites.get(0).getStackOffset(), bytes);
+    }
+
+    private static Varnode resolveConstantStoreValue(Varnode value) {
+        if (value == null) return null;
+        if (value.isConstant()) return value;
+
+        PcodeOp definition = value.getDef();
+        if (definition == null || definition.getOpcode() != PcodeOp.COPY
+                || definition.getNumInputs() != 1) {
+            return null;
+        }
+
+        Varnode source = definition.getInput(0);
+        return source != null && source.isConstant() ? source : null;
     }
 
     private static byte[] constantBytes(long value, int size, boolean bigEndian) {
