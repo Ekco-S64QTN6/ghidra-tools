@@ -5,11 +5,14 @@ All notable changes to this project are documented here.
 ## [Unreleased]
 
 ### Added
-- Add shell-level synthetic ELF dispatch tests that assert the exact processor ID passed to Ghidra for supported architecture mappings and no forced processor for unsupported/malformed inputs.
+- Add shell-level synthetic ELF dispatch tests that assert the exact processor ID passed to Ghidra for supported architecture mappings and no forced processor for unsupported/malformed inputs; include the ARM BE8 mapping.
 - Add a shared Ghidra language-definition probe and test SNES raw-analysis fallback only when the optional 65816 language is installed; keep SNES header detection active in the base image.
 - Run the broader synthetic Ghidra-backed integration suite in the pinned Ghidra 12.2/JDK 25 CI container, and use structurally valid synthetic GBA/N64/PSX headers in file-detection regressions.
 
+- Add a real Ghidra 12.2 ELF import matrix with synthetic executables that validate the opened language ID in generated JSON reports.
+
 ### Fixed
+- Select Ghidra's mixed-endian ARM language for ELF32 big-endian files carrying `EF_ARM_BE8`, rather than forcing the pure big-endian instruction language.
 - Update FindCrypt's cancellation polling to Ghidra 12.2's `TaskMonitor.checkCancelled()` API so the full Java pipeline compiles against the pinned runtime.
 - Attach stdin to the container smoke's heredoc so the PE analysis assertions actually execute; remove the unsupported assumption that vanilla Ghidra 12.2 contains the optional 65816 language.
 - Print the last 80 lines of the raw Ghidra fallback log when SNES fallback fails, and assert that bounded diagnostic output is retained in the mocked failure regression.

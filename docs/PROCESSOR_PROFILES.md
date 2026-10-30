@@ -31,13 +31,13 @@ The base Docker image installs Ghidra itself, not community loaders or the optio
 
 ## 2. ELF Architecture Detection and Processor Selection
 
-`scripts/architecture_detector.py` validates the ELF identification header before reading `e_machine`. The language mapping also uses ELF class and `EI_DATA` byte order; unknown or incompatible combinations do not receive a guessed processor. When a known mapping exists, `ghidra-report.sh` passes that language ID using Ghidra's `-processor` import option. The report writer independently records the language ID of the program Ghidra actually opened.
+`scripts/architecture_detector.py` validates the ELF identification header before reading `e_machine`. The language mapping uses ELF class, `EI_DATA` byte order, and architecture-specific flags where needed: for ARM ELF32 big-endian data, `EF_ARM_BE8` selects Ghidra's mixed-endian `ARM:LEBE:32:v8LEInstruction` language. Unknown or incompatible combinations do not receive a guessed processor. When a known mapping exists, `ghidra-report.sh` passes that language ID using Ghidra's `-processor` import option. The integration suite imports synthetic ELF executables through Ghidra 12.2 and verifies that the report writer records the language ID of the program Ghidra actually opened.
 
 | `e_machine` | ELF class / byte order | Selected Ghidra language |
 |---|---|---|
 | `EM_386` | ELF32 little-endian | `x86:LE:32:default` |
 | `EM_X86_64` | ELF64 little-endian | `x86:LE:64:default` |
-| `EM_ARM` | ELF32 little- or big-endian | `ARM:LE:32:v8` / `ARM:BE:32:v8` |
+| `EM_ARM` | ELF32 little- or big-endian | `ARM:LE:32:v8` / `ARM:BE:32:v8`; big-endian data with `EF_ARM_BE8` selects `ARM:LEBE:32:v8LEInstruction` |
 | `EM_AARCH64` | ELF64 little- or big-endian | `AARCH64:LE:64:v8A` / `AARCH64:BE:64:v8A` |
 | `EM_MIPS` | ELF32, either byte order | `MIPS:LE:32:default` / `MIPS:BE:32:default`; ELF64 is deliberately deferred until ABI/ISA flags can disambiguate the decoder |
 | `EM_RISCV` | ELF32/ELF64 little-endian | `RISCV:LE:32:default` / `RISCV:LE:64:default` |
