@@ -5,6 +5,7 @@ All notable changes to this project are documented here.
 ## [Unreleased]
 
 ### Added
+- Add shell-level synthetic ELF dispatch tests that assert the exact processor ID passed to Ghidra for supported architecture mappings and no forced processor for unsupported/malformed inputs.
 - Add a shared Ghidra language-definition probe and test SNES raw-analysis fallback only when the optional 65816 language is installed; keep SNES header detection active in the base image.
 - Run the broader synthetic Ghidra-backed integration suite in the pinned Ghidra 12.2/JDK 25 CI container, and use structurally valid synthetic GBA/N64/PSX headers in file-detection regressions.
 

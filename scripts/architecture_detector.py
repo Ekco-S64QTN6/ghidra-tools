@@ -17,9 +17,9 @@ ELF_LANGUAGES = {
     62: {(2, 1): "x86:LE:64:default"},                     # EM_X86_64
     40: {(1, 1): "ARM:LE:32:v8", (1, 2): "ARM:BE:32:v8"},  # EM_ARM
     183: {(2, 1): "AARCH64:LE:64:v8A", (2, 2): "AARCH64:BE:64:v8A"},
-    # Ghidra's current MIPS64 "default" language definitions describe MIPS16e.
-    # Do not force MIPS64 until ELF ABI/ISA flags are parsed well enough to select
-    # an appropriate decoder; continue to recognize MIPS32 from class and endian.
+    # Ghidra provides several MIPS64 variants (default, 16e, micro, and R6)
+    # plus ABI-specific compiler specs. This detector does not yet inspect e_flags
+    # and ABI metadata, so defer MIPS64 rather than guessing a language variant.
     8: {                                                    # EM_MIPS
         (1, 1): "MIPS:LE:32:default",
         (1, 2): "MIPS:BE:32:default",
