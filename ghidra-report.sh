@@ -45,6 +45,7 @@ SCRIPTS_DIR="$SCRIPT_DIR/scripts"
 source "$SCRIPTS_DIR/batch_runner.sh"
 source "$SCRIPTS_DIR/headless_log.sh"
 source "$SCRIPTS_DIR/output_lock.sh"
+source "$SCRIPTS_DIR/ghidra_language.sh"
 
 # Ghidra Flatpak and system paths
 GHIDRA_ROOT="${GHIDRA_ROOT:-}"
@@ -251,6 +252,12 @@ import_and_analyze() {
             log_info "Falling back to raw import with 65816 processor..."
             echo ""
 
+            if ! ghidra_language_available "65816:LE:24:snes"; then
+                log_error "Raw SNES fallback requires the Ghidra language 65816:LE:24:snes. Install a compatible 65816/SNES processor extension."
+                rm -f "$import_log"
+                return 1
+            fi
+
             rm -rf "$PROJECTS_DIR/${project_name}.rep" "$PROJECTS_DIR/${project_name}.gpr"
 
             local fallback_status=0
@@ -267,6 +274,10 @@ import_and_analyze() {
 
             if [ "$fallback_status" -ne 0 ] || grep -Eq "Import failed|No load spec found|could not successfully load" "$import_log"; then
                 log_error "Import failed even with raw 65816 fallback (exit status: $fallback_status)."
+                if [ -s "$import_log" ]; then
+                    log_error "Last 80 lines of Ghidra fallback output:"
+                    tail -n 80 "$import_log" >&2
+                fi
                 rm -f "$import_log"
                 if [ "$fallback_status" -ne 0 ]; then
                     return "$fallback_status"

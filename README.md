@@ -378,7 +378,7 @@ Host installs must use a Java runtime supported by the installed Ghidra release.
 docker compose run --rm ghidra-report --batch
 ```
 
-The image pins Ghidra 12.2 and Eclipse Temurin JDK 25, verifies the official release archive checksum, and preconfigures the headless analyzer. `ingress/` and `output/` are bind-mounted. GitHub Actions builds this image and runs a synthetic PE through the real analyzer, checking all seven artifacts and the JSON, SARIF, and MISP envelopes.
+The image pins Ghidra 12.2 and Eclipse Temurin JDK 25, verifies the official release archive checksum, and preconfigures the headless analyzer. `ingress/` and `output/` are bind-mounted. GitHub Actions builds this image, runs a real synthetic PE analysis, checks all seven artifacts and JSON/SARIF/MISP envelopes, then runs the broader synthetic suite. SNES header detection is covered independently; raw 65816 Ghidra analysis is skipped unless a compatible optional processor language is installed.
 
 ### Packages
 
@@ -396,12 +396,16 @@ For Homebrew/AUR installs, runtime assets stay together under the package's priv
 
 ### CI
 
-`.github/workflows/binary-analysis.yml` runs Python compilation, CLI help, launcher
-regressions, and dashboard security tests without requiring Ghidra. It does not
-run the full Ghidra-backed integration suite or upload SARIF yet. The prior
-upload-only manual job referenced a report it never generated and ignored upload
-failures; SARIF publishing will be re-enabled when CI creates and validates a real
-fixture report.
+`.github/workflows/binary-analysis.yml` has a fast no-Ghidra lane for Python,
+CLI, launcher, parser, and dashboard-security regressions. Its separate pinned
+Ghidra 12.2/JDK 25 container job executes a real synthetic PE analysis and checks
+all seven artifacts plus JSON/SARIF/MISP envelopes, then runs the broader
+`tests/run_tests.sh` suite using generated fixtures. SNES header detection runs
+without extensions; Ghidra raw 65816 analysis and dependent semantic diff tests
+are skipped unless the optional `65816:LE:24:snes` language definition is
+installed. That skip does not validate optional community loaders.
+SARIF publishing remains disabled until a complete generated-artifact upload path
+is implemented and tested.
 
 ---
 
@@ -422,6 +426,7 @@ python3 tests/test_project_identity.py
 ./ghidra-report.sh --help >/dev/null
 bash tests/test_run_headless.sh
 bash tests/test_headless_log.sh
+bash tests/test_ghidra_language.sh
 bash tests/test_snes_fallback.sh
 bash tests/test_report_generation.sh
 bash tests/test_batch_runner.sh
@@ -446,15 +451,22 @@ The history-indexer tests verify current/legacy report-field mapping, JSON-path 
 ./tests/run_tests.sh
 ```
 
-This suite generates its PE and SNES fixtures and requires a compatible Ghidra
-installation and Java. Community extensions are optional; `GHIDRA_EXTENSION_ROOT`
-can identify a per-user extension root, and the suite reports extension inventory
-as skipped when seven community extensions are not available. That skip does not
-verify extension-backed loaders. The default CI runs a smaller pinned-container
-PE analysis/report smoke test; running this entire suite in default CI remains
-open roadmap work.
+This suite generates synthetic PE, SNES, GBA, N64, and PS1 fixtures and
+requires a compatible Ghidra installation and Java for analysis tests. The
+default GitHub Actions container runs it with pinned Ghidra 12.2 and JDK 25.
+SNES header detection always runs, but raw 65816 analysis and its semantic-diff
+dependency run only when the optional `65816:LE:24:snes` language definition is
+installed in Ghidra or under `GHIDRA_EXTENSION_ROOT`. Other community-loader
+inventory is reported separately as skipped when seven extensions are not
+available; that skip does not verify extension-backed loaders.
 
-The broader suite is intended to cover the seven report artifacts, scoring, MISP/SARIF output, SNES header/MMIO/DMA extraction, semantic diffing, firmware carving, history search, capability and trace engines, SVD injection, file-type detection, packaging, and Java compilation. The default CI container job verifies the core PE path and exercises a synthetic SNES ROM through the raw 65816 fallback, checking header, function, MMIO, and DMA evidence alongside the generated report formats. This does not install or validate optional community loaders; the rest of the broader suite and extension-backed paths still require their own passing acceptance checks.
+The suite covers the seven report artifacts, scoring, MISP/SARIF output, firmware
+carving, history search, capability and trace engines, SVD injection, file-type
+detection, packaging, and Java compilation. It also validates SNES cartridge
+header detection on the base image; SNES MMIO/DMA analysis and the semantic diff
+require the optional 65816 language. The focused container smoke validates the
+real PE JSON against the checked-in schema and checks the SARIF/MISP envelopes.
+No job installs or validates optional community loaders.
 
 No test reads samples from `ingress/`; fixtures are generated in temporary
 locations, and real analysis samples should remain git-ignored.

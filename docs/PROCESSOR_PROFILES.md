@@ -13,11 +13,11 @@ Community loader extensions are installed separately and are specific to the ins
 find ~/.config/ghidra -type d -name Extensions -print
 ```
 
-The base Docker image installs Ghidra itself, not the community loaders listed below. Extension-backed paths therefore require separately installed versions compatible with the target Ghidra build; the container smoke check covers the core PE path and does not imply those optional loaders have been validated.
+The base Docker image installs Ghidra itself, not community loaders or the optional 65816 processor language. Extension-backed paths therefore require separately installed versions compatible with the target Ghidra build. Default container CI validates PE analysis and SNES header detection; raw SNES analysis runs only when the 65816 language definition is present.
 
 | Platform / Architecture | Loader Class / Extension | Ghidra Language ID | Detection Signature | Key Capabilities |
 |---|---|---|---|---|
-| **Super Nintendo (SNES)** | `SnesRomLoader` (`ghidra-snes-master`) or documented raw-65816 fallback | `65816:LE:24:snes` (fallback) | Plausible header title/mode, checksum complement, and reset vector at known header offsets; suffix is only a hint | LoROM/HiROM mapping, WRAM blocks, MMIO registers ($2100-$2143), SPC700 audio protocol |
+| **Super Nintendo (SNES)** | `SnesRomLoader` (`ghidra-snes-master`) or raw 65816 fallback when a compatible processor extension provides the language | `65816:LE:24:snes` (optional extension; not in base Ghidra 12.2) | Plausible header title/mode, checksum complement, and reset vector at known header offsets; suffix is only a hint | LoROM/HiROM mapping, WRAM blocks, MMIO registers ($2100-$2143), SPC700 audio protocol |
 | **Game Boy Advance (GBA)** | `GBALoader` (`gba-ghidra-loader`) | `ARM:LE:32:v4t` | `.gba` plus Nintendo logo prefix and header complement checksum | EWRAM, IWRAM, VRAM, ROM mapping, GBATEK hardware MMIO registers, BIOS SWI table |
 | **Nintendo 64 (N64)** | `N64LoaderWVLoader` (`N64LoaderWV`) | `MIPS:BE:64:64-32addr` | Byte-order magics for `.z64`/`.v64`/`.n64` layouts; recognized by bytes, not suffix alone | Big-endian/byte-swapped ROMs, RDRAM, MIPS VR4300 + RSP coprocessor, MMIO registers |
 | **Sony PlayStation 1 (PS1)** | `PsxLoader` (`ghidra_psx_ldr`) | `MIPS:LE:32:default` | `PS-X EXE` magic plus minimum 0x800-byte header; suffix is only a hint | MIPS R3000A, GTE (Geometry Engine) coprocessor, scratchpad, BIOS jump vectors |
