@@ -87,6 +87,21 @@ public class JsonReportWriter {
             }
             out.println("  ],");
 
+            out.println("  \"stack_strings\": [");
+            for (int i = 0; i < d.stackStrings.size(); i++) {
+                StackStringDetector.StackString ss = d.stackStrings.get(i);
+                out.print("    {\"address\": \"" + escapeJson(ss.address)
+                        + "\", \"function\": \"" + escapeJson(ss.functionName)
+                        + "\", \"method\": \"" + escapeJson(ss.method)
+                        + "\", \"value\": \"" + escapeJson(ss.value)
+                        + "\", \"byte_count\": " + ss.byteCount
+                        + ", \"stack_offset_start\": " + ss.stackOffsetStart
+                        + ", \"stack_offset_end\": " + ss.stackOffsetEnd
+                        + ", \"evidence\": \"" + escapeJson(ss.evidence) + "\"}");
+                out.println(i < d.stackStrings.size() - 1 ? "," : "");
+            }
+            out.println("  ],");
+
             out.println("  \"function_api_evidence\": [");
             List<ReportModel.FunctionScore> apiEvidenceFunctions = new ArrayList<>();
             for (ReportModel.FunctionScore fs : d.prioritizedFunctions) {

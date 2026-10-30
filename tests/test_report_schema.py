@@ -77,6 +77,28 @@ def main():
     }]
     validator.validate(function_report)
 
+    stack_string_report = sample_report()
+    stack_string_report["stack_strings"] = [{
+        "address": "0x401020",
+        "function": "entry",
+        "method": "contiguous_stack_immediate_stores",
+        "value": "ABCDEFGH",
+        "byte_count": 8,
+        "stack_offset_start": -8,
+        "stack_offset_end": 0,
+        "evidence": "8 printable ASCII bytes from consecutive constant stack writes at offsets [-8, 0)",
+    }]
+    validator.validate(stack_string_report)
+
+    malformed_stack_string = copy.deepcopy(stack_string_report)
+    malformed_stack_string["stack_strings"][0]["byte_count"] = "eight"
+    try:
+        validator.validate(malformed_stack_string)
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("schema unexpectedly accepted non-integer stack_string.byte_count")
+
     malformed_function_evidence = copy.deepcopy(function_report)
     malformed_function_evidence["function_api_evidence"][0]["suspicious_apis"][0]["call_site"] = 123
     try:

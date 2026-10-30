@@ -5,6 +5,7 @@ All notable changes to this project are documented here.
 ## [Unreleased]
 
 ### Added
+- Recover stack strings only from contiguous immediate P-code stores to verified stack-frame write references; expose method and offset provenance in JSON, with a real-Ghidra positive fixture and register-immediate false-positive controls.
 - Define the capability-rule DSL as strict schema version 1.0.0; assign stable IDs, rationale, and HTTPS ATT&CK references to every shipped rule, and add positive/negative fixtures for all 11 rules.
 - Add function-scoped process-injection detection backed by per-function suspicious API call sites; preserve caller and call-site addresses in an additive `function_api_evidence` JSON field and prevent cross-function evidence aggregation. Instruction/block scopes remain rejected.
 - Add shell-level synthetic ELF dispatch tests that assert the exact processor ID passed to Ghidra for supported architecture mappings and no forced processor for unsupported/malformed inputs; include the ARM BE8 mapping.

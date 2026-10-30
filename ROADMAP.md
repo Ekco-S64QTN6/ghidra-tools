@@ -142,15 +142,19 @@ Remaining P1.2 work: generic instruction/basic-block features, a broader per-fun
 **Relevant files:** `scripts/lib/EmulatorDeobfuscator.java`, `scripts/lib/StackStringDetector.java`, `scripts/lib/IocExtractor.java`, `scripts/ExportFullReport.java`.
 
 - Expand string scanning beyond strings Ghidra has already defined as data; support bounded raw-region scanning and UTF-16LE with address provenance.
-- The current stack-string detector concatenates printable immediate bytes from consecutive `MOV*`/`STR*` instructions without confirming that they target the same stack buffer. Verify stores, offsets, data flow, termination, and architecture before calling a result a reconstructed string.
+- The stack-string detector now requires a P-code constant STORE paired with a Ghidra stack-reference write, and joins only consecutive stores to contiguous stack-frame offsets. It deliberately does not yet propagate immediate values through registers or handle arbitrary data-flow/terminator patterns.
 - The XOR scanner selects an immediate and memory reference heuristically; the P-code pass uses a very small step budget and does not robustly initialize a realistic stack/call state. Treat these as candidate-producing heuristics, not proof of runtime decryption.
 - Add emulation time, instruction, memory, recursion, and output limits; record stop reasons; do not swallow every `Throwable` without diagnostic evidence.
 - Compare behavior and output quality with FLOSS on a documented, legally usable corpus. Integrate FLOSS as an optional backend only after evaluating licensing, dependencies, performance, and offline behavior.
 
 **Acceptance criteria**
 - Each extracted/recovered string includes method, address, function/context, and a confidence or evidence explanation.
-- Fixtures cover immediate-built stack strings, encoded static strings, UTF-16LE, false-positive patterns, unsupported architectures, and bounded emulation failures.
+- Fixtures cover contiguous immediate stack stores, register-immediate false positives, encoded static strings, UTF-16LE, unsupported architectures, and bounded emulation failures.
 - A regression report documents precision/recall on a sample corpus; no “emulated” result is emitted without actual execution evidence.
+
+**Incremental progress — 2026-10-30:** Reworked stack-string recovery to require an explicit Ghidra stack-reference write plus a constant P-code STORE. A result is emitted only when consecutive stores cover contiguous stack-frame offsets and all stored bytes are printable ASCII. Register-immediate moves are now excluded. JSON and text reports include the method, caller function, instruction address, stack-offset range, byte count, and evidence explanation. The synthetic PE fixture now contains a real contiguous stack string plus register-immediate decoys; the Ghidra integration suite asserts the expected recovery and rejects those decoys.
+
+Remaining string-recovery work: register-propagated and more complex data-flow reconstruction; UTF-16LE and bounded raw-region scanning; stronger XOR/P-code emulation setup, budgets, stop reasons, and corpus-based precision/recall validation.
 
 ### 1.4 Make firmware carving bounded, recursive, and verifiable
 

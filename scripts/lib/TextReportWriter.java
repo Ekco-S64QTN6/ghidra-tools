@@ -161,10 +161,13 @@ public class TextReportWriter {
         out.println("  RECONSTRUCTED STACK STRINGS (OBFUSCATION EVASION)");
         out.println("════════════════════════════════════════════════════════════════════════════════");
         out.println();
-        out.printf("  %-16s %-16s %s%n", "Address", "Function", "Reconstructed String");
-        out.println("  " + "-".repeat(75));
+        out.printf("  %-16s %-16s %-14s %s%n", "Address", "Function", "Stack offsets", "Reconstructed String");
+        out.println("  " + "-".repeat(88));
         for (StackStringDetector.StackString ss : d.stackStrings) {
-            out.printf("  %-16s %-16s \"%s\"%n", ss.address, ss.functionName, ss.value);
+            out.printf("  %-16s %-16s [%d, %d) \"%s\"%n",
+                    ss.address, ss.functionName, ss.stackOffsetStart, ss.stackOffsetEnd, ss.value);
+            out.println("    Method: " + ss.method);
+            out.println("    Evidence: " + ss.evidence);
         }
         out.println("  " + "-".repeat(75));
         out.println();

@@ -131,6 +131,28 @@ else
     log_fail "Function-scoped API call evidence was missing or incomplete"
 fi
 
+# Verify that printable strings are recovered only from contiguous immediate writes
+# to stack-frame offsets, not from ordinary register-immediate MOV instructions.
+if python3 - "$REP_DIR/report_latest.json" <<'PYSTACK'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    report = json.load(handle)
+strings = report.get("stack_strings", [])
+matches = [item for item in strings if item.get("value") == "ABCDEFGH"]
+assert matches, strings
+assert all(item.get("method") == "contiguous_stack_immediate_stores" for item in matches), matches
+assert all(item.get("function") and item.get("address") and item.get("evidence") for item in matches), matches
+assert all(item.get("stack_offset_end", 0) - item.get("stack_offset_start", 0) == 8 for item in matches), matches
+assert not any(item.get("value") in {"AAAA", "test"} for item in strings), strings
+PYSTACK
+then
+    log_pass "Stack-string recovery requires contiguous constant stack writes and rejects register-immediate decoys"
+else
+    log_fail "Stack-string evidence was missing, non-contiguous, or included register-immediate decoys"
+fi
+
 # Validate MISP JSON schema
 if python3 -c "import json; d=json.load(open('$REP_DIR/report_latest.misp.json')); assert 'Event' in d and len(d['Event']['Attribute']) > 0" 2>/dev/null; then
     log_pass "MISP 2.4 JSON schema validated with populated attributes"

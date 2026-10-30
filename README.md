@@ -45,7 +45,7 @@ Markdown file, a standalone HTML page, a SARIF run, a YARA rule and a MISP event
 |:--|:--|
 | **Triage first, data second** | Every report opens with a 0–100 score and the specific indicators that produced it. The 3,000-line dump is below the fold, not above it. |
 | **Priority, not address order** | Functions are scored on inbound xrefs, call density, suspicious-API reachability and size. The disassembly and decompiler excerpts follow that ranking, not the memory map. |
-| **Sees through obfuscation** | Stack strings are reconstructed from immediate `MOV` sequences, and a P-code emulator runs loop-dense functions to recover runtime-built and XOR-decoded strings. |
+| **Sees through obfuscation** | Stack strings are recovered only from consecutive constant stores to contiguous Ghidra stack-frame offsets; ordinary register-immediate moves are not treated as stack writes. A P-code emulator also runs selected loop/XOR functions to recover candidate runtime strings. |
 | **Rules live outside the code** | Capability rules are versioned YAML (`rules/*.yaml`); the evaluator supports file-aggregate matching plus API-only per-function call-site matching, but not arbitrary instruction/block patterns. |
 | **Beyond PE/ELF** | The CLI detects SNES, GBA, N64, and PS1 formats and has raw fallbacks; community console/firmware loaders must be installed separately and are not bundled in the base container. |
 | **Ends in a pipeline, not a file** | SARIF for code scanning, MISP for threat intel, YARA for hunting, searchable SQLite history, webhooks for alerting. |
