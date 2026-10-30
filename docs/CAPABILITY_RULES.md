@@ -8,18 +8,26 @@ consume the Mandiant capa rule corpus.
 
 ## Evaluation scope
 
-Every rule must declare `scope: "file"`. The evaluator runs against aggregate fields
-from one JSON report: `suspicious_apis`, `threat_summary.indicators`,
-`memory_blocks`, and `iocs`. It does not inspect instructions, basic blocks, or
-individual functions. Rules declaring instruction, block, or function scope are
-rejected during loading; changing the label cannot imply analysis capability that
-the report data does not contain.
+Rules declare either `scope: "file"` or `scope: "function"`.
 
-A result includes the stable rule `id`, schema version, original expression,
-rationale, references, and `evidence_quality: "file_aggregate"`. This is an evidence
-quality label, not a probability or calibrated confidence score. Current API evidence
-records the library and function name but not a call-site address because the report's
-suspicious-API data does not currently preserve call-site addresses.
+File rules run against aggregate fields from one JSON report:
+`suspicious_apis`, `threat_summary.indicators`, `memory_blocks`, and `iocs`.
+Their result is labelled `evidence_quality: "file_aggregate"`.
+
+Function rules currently support API-only expressions (including AND/OR/NOT/count)
+and run independently against each entry in `function_api_evidence`. The exporter
+records the caller function name/address and each resolved suspicious API's name,
+target address, and call-site address. Function rules cannot combine evidence from
+two different functions. Their result includes the matched caller and is labelled
+`evidence_quality: "function_callsite"`. Function API primitives accept unqualified
+API names; `library!function` selectors and file-only primitives are rejected for
+function-scope rules.
+
+Instruction and basic-block scopes are not supported. The function evidence is
+limited to suspicious APIs that Ghidra can resolve through call operands/call graph;
+it does not yet represent every call, arbitrary instruction patterns, or a complete
+per-function IOC/indicator view. Evidence-quality labels describe provenance, not
+probability or calibrated confidence.
 
 ## Rule metadata
 
@@ -28,7 +36,7 @@ Each rule requires:
 - `schema_version`: exactly `"1.0.0"`.
 - `id`: unique, stable `ghidra.*` identifier. Do not derive IDs from display names
   at runtime; once published, retain the same ID when wording changes.
-- `name`, `namespace`, and `scope: "file"`.
+- `name`, `namespace`, and either `scope: "file"` or `scope: "function"`.
 - `meta.att&ck`: syntactically valid ATT&CK technique identifier.
 - `meta.mbc`: the rule's MBC classification label.
 - `meta.weight`: integer from 0 through 100, used only for result ordering/weight metadata.
@@ -38,7 +46,10 @@ Each rule requires:
   to the corresponding canonical MITRE ATT&CK technique page. The loader checks
   identifier syntax and HTTPS shape; it does not synchronize or certify MBC taxonomy.
 
-Unknown top-level or metadata keys fail validation. Duplicate rule IDs fail the load.
+Function-scope rules may only use `and`, `or`, `not`, `count`, and unqualified `api`
+expressions. Other operators and library-qualified API selectors are rejected for
+that scope. Unknown top-level or metadata keys fail validation. Duplicate rule IDs
+fail the load.
 
 ## Feature operators
 
@@ -48,7 +59,7 @@ Unknown top-level or metadata keys fail validation. Duplicate rule IDs fail the 
 | `or` | At least one child expression must match. |
 | `not` | Match only when the child expression does not match; this emits no positive evidence. |
 | `count` | Match when at least `min` child expressions match; `min` defaults to 1. |
-| `api` | Case-insensitive exact API function name, or exact `library!function`. Substring matches are not used. |
+| `api` | Case-insensitive exact API function name; file scope also supports exact `library!function`. Substring matches are not used. |
 | `indicator` | Case-insensitive substring in an indicator description or category. |
 | `section_name` | Case-insensitive exact memory-block name. |
 | `section_rwx` | Match a memory block whose `rwx` value equals the requested boolean. |
@@ -72,6 +83,8 @@ python3 -m pip install -r requirements-test.txt
 python3 tests/test_capability_engine.py
 ```
 
-All shipped rules have a positive and negative fixture. Matching results are heuristic
-triage leads, not proof of malicious behavior. Function/basic-block scopes, call-site
-addresses, richer confidence, and semantic MBC taxonomy validation remain future work.
+All shipped rules have a positive and negative fixture. The process-injection rule
+also has function-isolation controls proving that APIs from separate functions cannot
+satisfy its expression together. Matching results are heuristic triage leads, not
+proof of malicious behavior. Instruction/basic-block features, broader function
+features, richer confidence, and semantic MBC taxonomy validation remain future work.

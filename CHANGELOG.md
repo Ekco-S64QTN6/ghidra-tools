@@ -6,7 +6,7 @@ All notable changes to this project are documented here.
 
 ### Added
 - Define the capability-rule DSL as strict schema version 1.0.0; assign stable IDs, rationale, and HTTPS ATT&CK references to every shipped rule, and add positive/negative fixtures for all 11 rules.
-- Reject unsupported instruction/block/function capability scopes until those features are actually available; mark all current rules file-aggregate and expose the evaluated expression plus evidence-quality label in JSON matches.
+- Add function-scoped process-injection detection backed by per-function suspicious API call sites; preserve caller and call-site addresses in an additive `function_api_evidence` JSON field and prevent cross-function evidence aggregation. Instruction/block scopes remain rejected.
 - Add shell-level synthetic ELF dispatch tests that assert the exact processor ID passed to Ghidra for supported architecture mappings and no forced processor for unsupported/malformed inputs; include the ARM BE8 mapping.
 - Add a shared Ghidra language-definition probe and test SNES raw-analysis fallback only when the optional 65816 language is installed; keep SNES header detection active in the base image.
 - Run the broader synthetic Ghidra-backed integration suite in the pinned Ghidra 12.2/JDK 25 CI container, and use structurally valid synthetic GBA/N64/PSX headers in file-detection regressions.

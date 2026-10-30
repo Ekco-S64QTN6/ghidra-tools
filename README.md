@@ -46,7 +46,7 @@ Markdown file, a standalone HTML page, a SARIF run, a YARA rule and a MISP event
 | **Triage first, data second** | Every report opens with a 0–100 score and the specific indicators that produced it. The 3,000-line dump is below the fold, not above it. |
 | **Priority, not address order** | Functions are scored on inbound xrefs, call density, suspicious-API reachability and size. The disassembly and decompiler excerpts follow that ranking, not the memory map. |
 | **Sees through obfuscation** | Stack strings are reconstructed from immediate `MOV` sequences, and a P-code emulator runs loop-dense functions to recover runtime-built and XOR-decoded strings. |
-| **Rules live outside the code** | Capability detection rules are YAML (`rules/*.yaml`) and can change without Java edits; the current evaluator matches aggregate report metadata, not true instruction/block/function analysis. |
+| **Rules live outside the code** | Capability rules are versioned YAML (`rules/*.yaml`); the evaluator supports file-aggregate matching plus API-only per-function call-site matching, but not arbitrary instruction/block patterns. |
 | **Beyond PE/ELF** | The CLI detects SNES, GBA, N64, and PS1 formats and has raw fallbacks; community console/firmware loaders must be installed separately and are not bundled in the base container. |
 | **Ends in a pipeline, not a file** | SARIF for code scanning, MISP for threat intel, YARA for hunting, searchable SQLite history, webhooks for alerting. |
 
@@ -308,7 +308,7 @@ that reads only from that container.
 |:--|:--|:--|
 | `firmware_carver.py` | `--carve` | Recursive container carving with format-compliant end-offset math — SquashFS, CRAMFS, JFFS2, U-Boot uImage, gzip/zlib. Runs *before* Ghidra so each sub-image can be analyzed on its own. |
 | `svd_injector.py` | `--svd` | Parses vendor CMSIS-SVD XML into peripheral base addresses, register offsets and IRQ vectors for bare-metal ARM Cortex-M / MIPS. |
-| `capability_engine.py` | `--rules` | Evaluates strict v1.0.0 file-aggregate YAML rules with AND/OR/NOT and N-of-M logic; exact API matching, not capa-compatible. |
+| `capability_engine.py` | `--rules` | Evaluates strict v1.0.0 YAML rules with file-aggregate and API-only function scopes, AND/OR/NOT and N-of-M logic; exact API matching, not capa-compatible. |
 | `trace_correlator.py` | `--trace` | Correlates a CAPE/DRAKVUF sandbox trace against the static import set using a sliding call window, so multi-step behaviours (alloc → write → create thread) match as one capability. |
 | `index_report.py` | *(automatic)* | Indexes each completed JSON report path into `output/reports.db`; separate runs and same-basename inputs remain distinct. Search combines SQLite `LIKE` matches on metadata/APIs/IOCs/indicators with FTS5 search across recovered text, symbols/functions, exports, rules, capabilities, and findings. |
 | `dashboard.py` | `--dashboard` | Standalone `http.server` UI + REST API. Loopback by default; `GHIDRA_DASHBOARD_HOST` opts into another bind address. |
@@ -351,17 +351,20 @@ PyYAML package so `--rules` works there as well.
 The capability DSL is versioned and validated against
 [`schemas/capability-rule-v1.schema.json`](schemas/capability-rule-v1.schema.json);
 stable IDs, rationales, and HTTPS references are required. Every shipped rule has
-a positive and a negative fixture. Only `scope: "file"` is supported: instruction,
-block, and function scopes are rejected during loading, rather than being accepted
-as labels for aggregate evaluation. API primitives use case-insensitive exact
-function or `library!function` matching; they no longer match arbitrary substrings.
+a positive and a negative fixture. `scope: "file"` evaluates aggregate report fields;
+`scope: "function"` evaluates API-only expressions independently against each
+function's resolved suspicious call sites. Instruction and basic-block scopes are
+rejected until the report contains the required features. API primitives use
+case-insensitive exact function names, or exact `library!function` names in file
+scope; substring matches are not used.
 
-Read [`docs/CAPABILITY_RULES.md`](docs/CAPABILITY_RULES.md) for the DSL contract,
-operators, metadata, and the limits of its file-aggregate evidence. Match output
-includes the rule ID, expression, rationale, references, and
-`evidence_quality: "file_aggregate"`; this is not a probability or calibrated
-confidence value. Call-site addresses and true per-function/basic-block feature
-extraction remain future work.
+The exporter adds an optional `function_api_evidence` array containing each caller
+function's address and the suspicious API target/call-site addresses. Function-scope
+rule matches include that caller identity, call-site evidence, and
+`evidence_quality: "function_callsite"`; file-scope matches retain
+`evidence_quality: "file_aggregate"`. Neither quality label is a probability or
+calibrated confidence score. Read [`docs/CAPABILITY_RULES.md`](docs/CAPABILITY_RULES.md)
+for the DSL contract and remaining limitations.
 
 ### Configuration
 

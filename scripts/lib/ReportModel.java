@@ -48,6 +48,12 @@ public class ReportModel {
         public String context = "";
     }
 
+    public static class FunctionApiCall {
+        public String function;
+        public String targetAddress;
+        public String callSite;
+    }
+
     public static class FunctionScore {
         public Function function;
         public int score;
@@ -55,6 +61,7 @@ public class ReportModel {
         public int callCount;
         public int suspiciousApiCallCount;
         public long instructionCount;
+        public final List<FunctionApiCall> suspiciousApis = new ArrayList<>();
         public String decompiledCode = null;
     }
 

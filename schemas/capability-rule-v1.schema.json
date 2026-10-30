@@ -32,7 +32,10 @@
     },
     "scope": {
       "type": "string",
-      "const": "file"
+      "enum": [
+        "file",
+        "function"
+      ]
     },
     "meta": {
       "type": "object",
@@ -224,6 +227,119 @@
           "additionalProperties": false
         }
       ]
+    },
+    "function_feature": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "and"
+          ],
+          "properties": {
+            "and": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/definitions/function_feature"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "or"
+          ],
+          "properties": {
+            "or": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/definitions/function_feature"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "not"
+          ],
+          "properties": {
+            "not": {
+              "$ref": "#/definitions/function_feature"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "count"
+          ],
+          "properties": {
+            "count": {
+              "type": "object",
+              "required": [
+                "items"
+              ],
+              "properties": {
+                "min": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "default": 1
+                },
+                "items": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "$ref": "#/definitions/function_feature"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "api"
+          ],
+          "properties": {
+            "api": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[^!]+$"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "scope": {
+            "const": "function"
+          }
+        },
+        "required": [
+          "scope"
+        ]
+      },
+      "then": {
+        "properties": {
+          "features": {
+            "$ref": "#/definitions/function_feature"
+          }
+        }
+      }
+    }
+  ]
 }

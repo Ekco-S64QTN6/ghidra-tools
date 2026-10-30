@@ -106,6 +106,31 @@ else
     log_fail "PE detector/import provenance verification failed"
 fi
 
+# Verify that Ghidra records suspicious API call sites under their actual caller function.
+if python3 - "$REP_DIR/report_latest.json" <<'PYFUNCTION'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    report = json.load(handle)
+functions = report.get("function_api_evidence", [])
+assert functions, "no function-level suspicious API call evidence was recorded"
+assert all(item.get("function") and item.get("address") for item in functions), functions
+calls = [
+    call
+    for function in functions
+    for call in function.get("suspicious_apis", [])
+]
+assert calls, functions
+assert all(call.get("function") and call.get("target_address") and call.get("call_site") for call in calls), calls
+assert any(call["function"] == "GetModuleHandleA" for call in calls), calls
+PYFUNCTION
+then
+    log_pass "Ghidra report records imported API call sites against their caller functions"
+else
+    log_fail "Function-scoped API call evidence was missing or incomplete"
+fi
+
 # Validate MISP JSON schema
 if python3 -c "import json; d=json.load(open('$REP_DIR/report_latest.misp.json')); assert 'Event' in d and len(d['Event']['Attribute']) > 0" 2>/dev/null; then
     log_pass "MISP 2.4 JSON schema validated with populated attributes"
