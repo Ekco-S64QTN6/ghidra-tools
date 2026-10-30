@@ -8,6 +8,7 @@
 //@author ghidra-tools
 
 import ghidra.app.script.GhidraScript;
+import ghidra.app.cmd.function.NewFunctionStackAnalysisCmd;
 import lib.ApiTagger;
 import lib.DecompilerExporter;
 import lib.EmulatorDeobfuscator;
@@ -363,6 +364,24 @@ public class ExportFullReport extends GhidraScript {
     private void analyzeFunctionsAndPriorities() {
         FunctionManager fm = currentProgram.getFunctionManager();
         Listing listing = currentProgram.getListing();
+
+        // Stack-reference records are not guaranteed to exist after the default
+        // headless analyzers. Create them explicitly before the stack-string pass
+        // so the detector can verify destination offsets instead of guessing from
+        // mnemonics or immediate operands.
+        AddressSet stackFunctionEntries = new AddressSet();
+        FunctionIterator stackFunctions = fm.getFunctions(true);
+        while (stackFunctions.hasNext()) {
+            stackFunctionEntries.add(stackFunctions.next().getEntryPoint());
+        }
+        if (!stackFunctionEntries.isEmpty()) {
+            NewFunctionStackAnalysisCmd stackAnalysis =
+                    new NewFunctionStackAnalysisCmd(stackFunctionEntries, true);
+            if (!stackAnalysis.applyTo(currentProgram, monitor)) {
+                println("[!] Ghidra stack-reference analysis was incomplete; stack-string recovery may be limited.");
+            }
+        }
+
         FunctionIterator funcs = fm.getFunctions(true);
 
         while (funcs.hasNext()) {
