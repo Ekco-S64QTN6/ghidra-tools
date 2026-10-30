@@ -31,6 +31,7 @@ with open(output_path, "w", encoding="utf-8") as handle:
     handle.write(source[start:end] + "\n")
 PY
 source "$TMP_DIR/import_function.sh"
+source "$SCRIPT_DIR/scripts/ghidra_language.sh"
 
 SCRIPTS_DIR="$SCRIPT_DIR/scripts"
 PROJECTS_DIR="$TMP_DIR/projects"
@@ -44,6 +45,9 @@ CALL_LOG="$TMP_DIR/calls"
 ARG_LOG="$TMP_DIR/args"
 
 detect_file_type() { printf 'snes\n'; }
+ghidra_language_available() {
+    [[ "${MOCK_65816_AVAILABLE:-true}" == true ]]
+}
 
 run_headless_logged() {
     local log_path="$1"
@@ -85,6 +89,19 @@ grep -Fq -- "-processor" "$ARG_LOG" || fail "raw fallback did not pass an explic
 grep -Fq "65816:LE:24:snes" "$ARG_LOG" || fail "raw fallback used the wrong processor"
 grep -Fq "Falling back to raw import with 65816 processor" "$TMP_DIR/generic.log" || fail "fallback diagnostic was not shown"
 pass "nonzero loader failure falls back even without a recognized diagnostic"
+
+# If the language definition is absent, fail before invoking an unsupported processor.
+: > "$CALL_LOG"
+if MOCK_65816_AVAILABLE=false MOCK_IMPORT_STATUS=41 MOCK_IMPORT_LOG_MODE=generic \
+    import_and_analyze "$SNES_FIXTURE" "snes-no-language" >"$TMP_DIR/no-language.log" 2>&1; then
+    fail "missing 65816 language unexpectedly allowed raw fallback"
+else
+    status=$?
+fi
+[[ "$status" -eq 1 ]] || fail "missing-language failure returned unexpected status $status"
+[[ "$(wc -l < "$CALL_LOG" | tr -d ' ')" == 1 ]] || fail "raw fallback was invoked without an installed language"
+grep -Fq "requires the Ghidra language 65816:LE:24:snes" "$TMP_DIR/no-language.log" || fail "missing-language diagnostic absent"
+pass "missing 65816 language produces a clear error without launching an unsupported processor"
 
 # Preserve support for Ghidra builds that report a loader rejection in text but
 # return a zero exit code.

@@ -45,6 +45,7 @@ SCRIPTS_DIR="$SCRIPT_DIR/scripts"
 source "$SCRIPTS_DIR/batch_runner.sh"
 source "$SCRIPTS_DIR/headless_log.sh"
 source "$SCRIPTS_DIR/output_lock.sh"
+source "$SCRIPTS_DIR/ghidra_language.sh"
 
 # Ghidra Flatpak and system paths
 GHIDRA_ROOT="${GHIDRA_ROOT:-}"
@@ -250,6 +251,12 @@ import_and_analyze() {
             log_warn "SNES ROM Loader rejected file (possibly non-standard header)."
             log_info "Falling back to raw import with 65816 processor..."
             echo ""
+
+            if ! ghidra_language_available "65816:LE:24:snes"; then
+                log_error "Raw SNES fallback requires the Ghidra language 65816:LE:24:snes. Install a compatible 65816/SNES processor extension."
+                rm -f "$import_log"
+                return 1
+            fi
 
             rm -rf "$PROJECTS_DIR/${project_name}.rep" "$PROJECTS_DIR/${project_name}.gpr"
 

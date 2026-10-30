@@ -10,13 +10,13 @@ Repository-specific guidance for contributors and coding agents.
 
 - The default container target is **Ghidra 12.2 + JDK 25**. Ghidra 12.2 requires at least JDK 25. The Docker build must verify the official release archive SHA-256 before extraction; do not update the version/date without refreshing the checksum from the upstream release and getting the container CI smoke test to pass.
 - `run-headless.sh` honors `GHIDRA_ROOT` and `JAVA_HOME`, uses `support/analyzeHeadless` for standard installs, and retains a derived-JDK workaround for Flatpak. Its Ghidra-root/version and Java-runtime messages are diagnostic; they do not certify compatibility of every Ghidra/Java pair.
-- Community console/firmware loaders are not bundled in the base Docker image. Claims about extension-backed loader behavior need an extension-equipped integration test. The container test covers PE analysis plus a synthetic SNES ROM through the raw 65816 fallback; this does not validate optional community loader extensions or all retail ROM variants.
+- Community console/firmware loaders and the 65816 language definition are not bundled in the base Docker image. Claims about extension-backed behavior need an extension-equipped integration test. Default CI runs PE analysis and SNES header detection; SNES raw-analysis checks are skipped unless `65816:LE:24:snes` is installed.
 
 ## Test lanes
 
 - The fast no-Ghidra lane in `.github/workflows/binary-analysis.yml` runs Python/CLI/helper/security regressions.
-- The Ghidra-container job builds the pinned image, analyzes generated synthetic PE and SNES fixtures with real Ghidra, checks all seven non-empty report formats, validates both primary JSON reports against `schemas/report-v1.schema.json`, and checks SARIF 2.1.0/MISP structure. It then runs `tests/run_tests.sh` in the same pinned Ghidra 12.2/JDK 25 image. SARIF/MISP checks are envelope checks, not full official schema validation.
-- `tests/run_tests.sh` generates its own fixtures and runs the broader Ghidra-backed integration checks. Optional community-extension inventory is skipped when fewer than seven extensions are present; that skip is not evidence of extension-backed loader correctness.
+- The Ghidra-container job builds the pinned image, executes a real synthetic PE analysis with Ghidra, checks all seven non-empty report formats, validates the primary JSON report against `schemas/report-v1.schema.json`, and checks SARIF 2.1.0/MISP structure. It then runs `tests/run_tests.sh` in the same pinned Ghidra 12.2/JDK 25 image. SNES detection is covered, but raw 65816 analysis and dependent semantic diff are skipped unless the optional language ID is installed. SARIF/MISP checks are envelope checks, not full official schema validation.
+- `tests/run_tests.sh` generates its own fixtures and runs the broader Ghidra-backed integration checks. It checks SNES header detection even without 65816, and skips only the 65816-dependent Ghidra analysis/diff when that language ID is absent. Optional community-extension inventory is separately skipped when fewer than seven extensions are present.
 - Do not claim a test group passed unless the relevant command or GitHub job actually ran successfully. A fast no-Ghidra pass is not a replacement for container/runtime verification.
 
 ## Output identity, concurrency, and publication
