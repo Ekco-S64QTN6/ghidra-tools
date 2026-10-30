@@ -10,7 +10,8 @@ services:
       - ./output:/workspace/output
       - ./projects:/workspace/projects
     environment:
-      # Bind inside the container; publish to host loopback only unless deliberately changed.
+      # Container-side wildcard bind requires the dashboard authentication token.
       - GHIDRA_DASHBOARD_HOST=0.0.0.0
+      - GHIDRA_DASHBOARD_TOKEN=${GHIDRA_DASHBOARD_TOKEN:-}
     command: ["--dashboard", "8080"]
     restart: unless-stopped
