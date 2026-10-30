@@ -219,7 +219,12 @@ def inspect_file(path):
         if magic[:4] == b"\x7fELF":
             elf = inspect_elf(path)
             if elf and elf.get("valid"):
-                return {"format": "elf", "processor": elf["processor"], "evidence": elf["evidence"]}
+                return {
+                    "format": "elf",
+                    "processor": elf["processor"],
+                    "e_flags": elf["e_flags"],
+                    "evidence": elf["evidence"],
+                }
             return {"format": "raw", "processor": None, "evidence": elf["evidence"] if elf else "truncated ELF header; raw import"}
 
         if magic[:4] in N64_MAGICS:
