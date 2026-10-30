@@ -91,7 +91,7 @@ jobs:
         run: bash tests/test_output_lock.sh
 
       - name: Check shell script syntax
-        run: bash -n ghidra-report.sh run-headless.sh scripts/headless_log.sh scripts/output_lock.sh scripts/ghidra_language.sh tests/test_headless_log.sh tests/test_ghidra_language.sh tests/test_snes_fallback.sh tests/test_architecture_dispatch.sh tests/test_report_generation.sh tests/test_output_lock.sh
+        run: bash -n ghidra-report.sh run-headless.sh scripts/headless_log.sh scripts/output_lock.sh scripts/ghidra_language.sh tests/test_headless_log.sh tests/test_ghidra_language.sh tests/test_snes_fallback.sh tests/test_architecture_dispatch.sh tests/test_elf_imports.sh tests/test_report_generation.sh tests/test_output_lock.sh
 
       - name: Test batch failure propagation
         run: bash tests/test_batch_runner.sh

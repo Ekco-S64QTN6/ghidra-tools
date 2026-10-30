@@ -463,8 +463,10 @@ available; that skip does not verify extension-backed loaders.
 
 The suite covers the seven report artifacts, scoring, MISP/SARIF output, firmware
 carving, history search, capability and trace engines, SVD injection, file-type
-detection, packaging, and Java compilation. It also validates SNES cartridge
-header detection on the base image; SNES MMIO/DMA analysis and the semantic diff
+detection, packaging, and Java compilation. It also imports 15 synthetic ELF
+executables through the real Ghidra loader (including ARM BE8) and verifies that
+each JSON report records the expected opened language ID. SNES cartridge header
+detection runs on the base image; SNES MMIO/DMA analysis and the semantic diff
 require the optional 65816 language. The focused container smoke validates the
 real PE JSON against the checked-in schema and checks the SARIF/MISP envelopes.
 No job installs or validates optional community loaders.
