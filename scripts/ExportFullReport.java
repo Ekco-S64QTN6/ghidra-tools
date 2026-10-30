@@ -9,6 +9,8 @@
 
 import ghidra.app.script.GhidraScript;
 import ghidra.app.cmd.function.NewFunctionStackAnalysisCmd;
+import ghidra.program.model.pcode.PcodeOp;
+import ghidra.program.model.pcode.Varnode;
 import lib.ApiTagger;
 import lib.DecompilerExporter;
 import lib.EmulatorDeobfuscator;
@@ -361,6 +363,45 @@ public class ExportFullReport extends GhidraScript {
 
     // --- Priority Scoring & Decompilation ---
 
+    private void debugStackReferences(Function function, Listing listing) {
+        println("[STACK-PROBE] function=" + function.getName()
+                + " stackVariables=" + function.getStackFrame().getStackVariables().length);
+        InstructionIterator instructions = listing.getInstructions(function.getBody(), true);
+        while (instructions.hasNext()) {
+            Instruction instruction = instructions.next();
+            String instructionText = instruction.toString().toUpperCase();
+            if (!instructionText.contains("EBP") && !instructionText.contains("ESP")) continue;
+
+            println("[STACK-PROBE] instruction=" + instruction.getAddress() + " " + instruction);
+            for (int operand = 0; operand < instruction.getNumOperands(); operand++) {
+                Reference primary = instruction.getPrimaryReference(operand);
+                println("[STACK-PROBE] operand=" + operand
+                        + " type=0x" + Integer.toHexString(instruction.getOperandType(operand))
+                        + " primary=" + (primary == null ? "null"
+                        : primary.getClass().getName() + "/" + primary.getReferenceType()
+                        + "/stack=" + primary.isStackReference() + "/to=" + primary.getToAddress()));
+            }
+            for (Reference reference : instruction.getReferencesFrom()) {
+                println("[STACK-PROBE] reference=" + reference.getClass().getName()
+                        + " operand=" + reference.getOperandIndex()
+                        + " type=" + reference.getReferenceType()
+                        + " stack=" + reference.isStackReference()
+                        + " to=" + reference.getToAddress());
+            }
+            PcodeOp[] pcode = instruction.getPcode();
+            if (pcode == null) continue;
+            for (PcodeOp operation : pcode) {
+                if (operation == null || operation.getOpcode() != PcodeOp.STORE
+                        || operation.getNumInputs() < 3) continue;
+                Varnode value = operation.getInput(2);
+                println("[STACK-PROBE] store=" + operation
+                        + " valueConstant=" + value.isConstant()
+                        + " valueSize=" + value.getSize()
+                        + " valueOffset=0x" + Long.toHexString(value.getOffset()));
+            }
+        }
+    }
+
     private void analyzeFunctionsAndPriorities() {
         FunctionManager fm = currentProgram.getFunctionManager();
         Listing listing = currentProgram.getListing();
@@ -374,12 +415,21 @@ public class ExportFullReport extends GhidraScript {
         while (stackFunctions.hasNext()) {
             stackFunctionEntries.add(stackFunctions.next().getEntryPoint());
         }
+        boolean stackAnalysisComplete = true;
         if (!stackFunctionEntries.isEmpty()) {
             NewFunctionStackAnalysisCmd stackAnalysis =
                     new NewFunctionStackAnalysisCmd(stackFunctionEntries, true);
-            if (!stackAnalysis.applyTo(currentProgram, monitor)) {
+            stackAnalysisComplete = stackAnalysis.applyTo(currentProgram, monitor);
+            if (!stackAnalysisComplete) {
                 println("[!] Ghidra stack-reference analysis was incomplete; stack-string recovery may be limited.");
             }
+        }
+        println("[STACK-PROBE] analysisComplete=" + stackAnalysisComplete
+                + " functionEntries=" + stackFunctionEntries.getNumAddresses());
+
+        FunctionIterator diagnosticFunctions = fm.getFunctions(true);
+        while (diagnosticFunctions.hasNext()) {
+            debugStackReferences(diagnosticFunctions.next(), listing);
         }
 
         FunctionIterator funcs = fm.getFunctions(true);
