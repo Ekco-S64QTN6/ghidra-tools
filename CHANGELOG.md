@@ -9,6 +9,7 @@ All notable changes to this project are documented here.
 - Run the broader synthetic Ghidra-backed integration suite in the pinned Ghidra 12.2/JDK 25 CI container, and use structurally valid synthetic GBA/N64/PSX headers in file-detection regressions.
 
 ### Fixed
+- Update FindCrypt's cancellation polling to Ghidra 12.2's `TaskMonitor.checkCancelled()` API so the full Java pipeline compiles against the pinned runtime.
 - Attach stdin to the container smoke's heredoc so the PE analysis assertions actually execute; remove the unsupported assumption that vanilla Ghidra 12.2 contains the optional 65816 language.
 - Print the last 80 lines of the raw Ghidra fallback log when SNES fallback fails, and assert that bounded diagnostic output is retained in the mocked failure regression.
 - Trigger SNES raw 65816 fallback when the optional loader exits nonzero even if its diagnostic text changes; test generic failures and fallback status preservation, and add a real-Ghidra container acceptance path for the generated SNES LoROM fixture.

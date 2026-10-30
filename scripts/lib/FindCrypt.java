@@ -987,7 +987,7 @@ public class FindCrypt extends GhidraScript {
 		var foundEntries = new FoundCryptoEntries();
 		
 		for (var alg: WorksetManager.GetDB()) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			
 			var _found = currentProgram.getMemory().findBytes(currentProgram.getMinAddress(), alg._buffer, null, true, monitor);
 			if (_found != null) {
