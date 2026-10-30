@@ -1,7 +1,12 @@
+schema_version: "1.0.0"
+id: "ghidra.packed-executable-suspicious-section"
 name: "Packed Executable with Suspicious Section"
 namespace: "anti-analysis/packer"
 scope: "file"
 meta:
+  rationale: "High entropy, RWX, and GetPC indicators are candidate packing or stub evidence; compressed assets and legitimate protectors can produce these signals."
+  references:
+    - "https://attack.mitre.org/techniques/T1027/002/"
   att&ck: "T1027.002"
   mbc: "Anti-Static Analysis::Software Packing [B0027]"
   weight: 30

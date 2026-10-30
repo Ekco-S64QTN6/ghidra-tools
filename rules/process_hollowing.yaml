@@ -1,7 +1,12 @@
+schema_version: "1.0.0"
+id: "ghidra.process-hollowing-memory-unmapping"
 name: "Process Hollowing via Memory Unmapping"
 namespace: "defense-evasion/process-hollow"
 scope: "file"
 meta:
+  rationale: "Unmapping an image, changing thread context, and resuming it form a more specific process-hollowing pattern than any one API alone."
+  references:
+    - "https://attack.mitre.org/techniques/T1055/012/"
   att&ck: "T1055.012"
   mbc: "Defense Evasion::Process Hollowing [B0007]"
   weight: 45

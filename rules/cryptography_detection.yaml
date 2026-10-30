@@ -1,7 +1,12 @@
+schema_version: "1.0.0"
+id: "ghidra.cryptographic-routine-indicators"
 name: "Cryptographic Routine or Cipher Constant"
 namespace: "cryptography/ciphers"
 scope: "file"
 meta:
+  rationale: "Cryptographic constants alone may be benign; this broad rule flags crypto indicators for analyst review rather than asserting malicious encryption."
+  references:
+    - "https://attack.mitre.org/techniques/T1027/"
   att&ck: "T1027"
   mbc: "Cryptography::Encrypt Data [C0027]"
   weight: 20

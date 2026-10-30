@@ -5,6 +5,8 @@ All notable changes to this project are documented here.
 ## [Unreleased]
 
 ### Added
+- Define the capability-rule DSL as strict schema version 1.0.0; assign stable IDs, rationale, and HTTPS ATT&CK references to every shipped rule, and add positive/negative fixtures for all 11 rules.
+- Reject unsupported instruction/block/function capability scopes until those features are actually available; mark all current rules file-aggregate and expose the evaluated expression plus evidence-quality label in JSON matches.
 - Add shell-level synthetic ELF dispatch tests that assert the exact processor ID passed to Ghidra for supported architecture mappings and no forced processor for unsupported/malformed inputs; include the ARM BE8 mapping.
 - Add a shared Ghidra language-definition probe and test SNES raw-analysis fallback only when the optional 65816 language is installed; keep SNES header detection active in the base image.
 - Run the broader synthetic Ghidra-backed integration suite in the pinned Ghidra 12.2/JDK 25 CI container, and use structurally valid synthetic GBA/N64/PSX headers in file-detection regressions.
@@ -13,6 +15,7 @@ All notable changes to this project are documented here.
 - Preserve detector evidence, recommended and explicitly requested processor IDs, requested loaders, import strategy, and ELF flags in an additive optional JSON `detection` object; assert the provenance against real PE/ELF reports.
 
 ### Fixed
+- Use exact case-insensitive API-name matching in capability rules instead of potentially overbroad substring matching.
 - Select Ghidra's mixed-endian ARM language for ELF32 big-endian files carrying `EF_ARM_BE8`, rather than forcing the pure big-endian instruction language.
 - Update FindCrypt's cancellation polling to Ghidra 12.2's `TaskMonitor.checkCancelled()` API so the full Java pipeline compiles against the pinned runtime.
 - Attach stdin to the container smoke's heredoc so the PE analysis assertions actually execute; remove the unsupported assumption that vanilla Ghidra 12.2 contains the optional 65816 language.

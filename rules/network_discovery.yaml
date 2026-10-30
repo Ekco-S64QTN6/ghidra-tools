@@ -1,7 +1,12 @@
+schema_version: "1.0.0"
+id: "ghidra.network-configuration-discovery"
 name: "Network Configuration Discovery"
 namespace: "discovery/network-info"
 scope: "file"
 meta:
+  rationale: "Enumerating adapter addresses or IP tables supports network configuration discovery; ordinary network utilities will also match."
+  references:
+    - "https://attack.mitre.org/techniques/T1016/"
   att&ck: "T1016"
   mbc: "Discovery::Network Configuration Discovery [E1016]"
   weight: 15
