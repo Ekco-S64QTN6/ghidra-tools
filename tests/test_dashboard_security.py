@@ -2,6 +2,7 @@
 """Regression tests for dashboard path containment, output safety, and bind defaults."""
 
 import http.client
+import base64
 import json
 import os
 import re
@@ -51,10 +52,11 @@ class DashboardSecurityTests(unittest.TestCase):
         dashboard.DB_PATH = self.old_db_path
         self.temp.cleanup()
 
-    def request(self, target):
-        connection = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=3)
+    def request(self, target, headers=None, server=None, host="127.0.0.1"):
+        target_server = server or self.server
+        connection = http.client.HTTPConnection(host, target_server.server_port, timeout=3)
         try:
-            connection.request("GET", target)
+            connection.request("GET", target, headers=headers or {})
             response = connection.getresponse()
             body = response.read()
             return response.status, dict(response.getheaders()), body
@@ -73,6 +75,72 @@ class DashboardSecurityTests(unittest.TestCase):
             finally:
                 if previous is not None:
                     os.environ["GHIDRA_DASHBOARD_HOST"] = previous
+
+    def test_remote_binds_fail_closed_without_a_strong_token(self):
+        with patch.dict(os.environ, {"GHIDRA_DASHBOARD_TOKEN": ""}):
+            with self.assertRaisesRegex(ValueError, "require GHIDRA_DASHBOARD_TOKEN"):
+                dashboard.create_server(0, host="0.0.0.0")
+        with patch.dict(os.environ, {"GHIDRA_DASHBOARD_TOKEN": "too-short"}):
+            with self.assertRaisesRegex(ValueError, "at least 32 UTF-8 bytes"):
+                dashboard.create_server(0, host="0.0.0.0")
+        # Unknown DNS names are conservatively treated as remote bind targets.
+        with patch.dict(os.environ, {"GHIDRA_DASHBOARD_TOKEN": ""}):
+            with self.assertRaisesRegex(ValueError, "require GHIDRA_DASHBOARD_TOKEN"):
+                dashboard.create_server(0, host="dashboard.example")
+
+    def test_remote_dashboard_requires_basic_auth_for_every_get_route(self):
+        token = "dashboard-test-token-" + ("a" * 48)
+        remote_server = dashboard.create_server(0, host="0.0.0.0", auth_token=token)
+        remote_thread = threading.Thread(target=remote_server.serve_forever, daemon=True)
+        remote_thread.start()
+        try:
+            for target in ("/", "/api/reports", "/api/search?q=test",
+                           "/output/sample/report_latest.json"):
+                with self.subTest(target=target):
+                    status, headers, body = self.request(target, server=remote_server)
+                    self.assertEqual(status, 401)
+                    self.assertIn("Basic", headers.get("WWW-Authenticate", ""))
+                    self.assertEqual(headers.get("Cache-Control"), "no-store")
+                    self.assertEqual(headers.get("X-Content-Type-Options"), "nosniff")
+        self.assertEqual(headers.get("Cache-Control"), "no-store")
+                    self.assertIn(b"Authentication required", body)
+
+            credentials = base64.b64encode(
+                ("ghidra-report:" + token).encode("utf-8")
+            ).decode("ascii")
+            auth_headers = {"Authorization": "Basic " + credentials}
+            status, _headers, body = self.request(
+                "/", headers=auth_headers, server=remote_server
+            )
+            self.assertEqual(status, 200)
+            self.assertIn(b"Threat Intelligence Dashboard", body)
+
+            status, _headers, body = self.request(
+                "/output/sample/report_latest.json",
+                headers=auth_headers,
+                server=remote_server,
+            )
+            self.assertEqual(status, 200)
+            self.assertEqual(body, b'{"ok": true}')
+
+            wrong_credentials = base64.b64encode(
+                ("ghidra-report:" + ("b" * 64)).encode("utf-8")
+            ).decode("ascii")
+            status, _headers, _body = self.request(
+                "/api/reports",
+                headers={"Authorization": "Basic " + wrong_credentials},
+                server=remote_server,
+            )
+            self.assertEqual(status, 401)
+        finally:
+            remote_server.shutdown()
+            remote_server.server_close()
+            remote_thread.join(timeout=2)
+
+    def test_loopback_dashboard_does_not_require_authentication(self):
+        status, _headers, body = self.request("/")
+        self.assertEqual(status, 200)
+        self.assertIn(b"Threat Intelligence Dashboard", body)
 
     def test_report_files_are_served_from_output(self):
         status, headers, body = self.request("/output/sample/report_latest.json")

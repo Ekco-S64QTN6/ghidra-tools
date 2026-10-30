@@ -9,6 +9,9 @@ import os
 import json
 import sqlite3
 import mimetypes
+import base64
+import hmac
+import ipaddress
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, unquote
 
@@ -39,6 +42,24 @@ def output_key_for_report(json_path, fallback):
         return key or fallback
     except (OSError, ValueError):
         return fallback
+
+
+def is_loopback_bind_host(host):
+    """Return True only for an explicit loopback IP or localhost hostname."""
+    if not isinstance(host, str):
+        return False
+    normalized = host.strip().lower().rstrip(".")
+    if normalized == "localhost":
+        return True
+    if normalized.startswith("[") and normalized.endswith("]"):
+        normalized = normalized[1:-1]
+    normalized = normalized.split("%", 1)[0]
+    try:
+        return ipaddress.ip_address(normalized).is_loopback
+    except ValueError:
+        # Treat DNS names and unknown host forms as remote. Requiring auth is
+        # safer than resolving a name whose answer can vary between checks.
+        return False
 
 
 def resolve_output_path(relative_path):
@@ -395,6 +416,40 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 """
 
 class DashboardHandler(BaseHTTPRequestHandler):
+    REMOTE_AUTH_REQUIRED = False
+    REMOTE_AUTH_TOKEN = ""
+    AUTH_USERNAME = "ghidra-report"
+
+    def _has_valid_remote_credentials(self):
+        """Validate HTTP Basic credentials without disclosing which part failed."""
+        authorization = self.headers.get("Authorization", "")
+        scheme, separator, encoded = authorization.partition(" ")
+        if not separator or scheme.lower() != "basic" or not encoded:
+            return False
+        try:
+            credentials = base64.b64decode(encoded, validate=True).decode("utf-8")
+        except (ValueError, UnicodeDecodeError):
+            return False
+
+        username, separator, supplied_token = credentials.partition(":")
+        if not separator:
+            return False
+        username_valid = hmac.compare_digest(username, self.AUTH_USERNAME)
+        token_valid = hmac.compare_digest(supplied_token, self.REMOTE_AUTH_TOKEN)
+        return username_valid and token_valid
+
+    def _send_authentication_required(self):
+        self.send_response(401)
+        self.send_header(
+            "WWW-Authenticate",
+            'Basic realm="ghidra-report", charset="UTF-8"',
+        )
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        body = b"Authentication required.\\n"
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def end_headers(self):
         """Apply defensive browser headers to the UI, APIs, and report artifacts."""
         request_path = urlparse(self.path).path
@@ -426,10 +481,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Security-Policy", policy)
         super().end_headers()
 
     def do_GET(self):
+        # Every dashboard and artifact route is protected for remote binds.
+        if self.REMOTE_AUTH_REQUIRED and not self._has_valid_remote_credentials():
+            self._send_authentication_required()
+            return
+
         parsed = urlparse(self.path)
         path = parsed.path
 
@@ -635,18 +696,39 @@ class DashboardHandler(BaseHTTPRequestHandler):
         # Silence verbose request logs
         return
 
-def create_server(port=8080, host=None):
-    """Create the HTTP server, loopback-only unless an explicit host is configured."""
+def create_server(port=8080, host=None, auth_token=None):
+    """Create the dashboard server; non-loopback binds require a strong token."""
     bind_host = host or os.environ.get("GHIDRA_DASHBOARD_HOST", "127.0.0.1")
-    return HTTPServer((bind_host, port), DashboardHandler)
+    handler_class = DashboardHandler
+    if not is_loopback_bind_host(bind_host):
+        token = (
+            os.environ.get("GHIDRA_DASHBOARD_TOKEN", "")
+            if auth_token is None else auth_token
+        )
+        if not isinstance(token, str) or len(token.encode("utf-8")) < 32:
+            raise ValueError(
+                "Remote dashboard binds require GHIDRA_DASHBOARD_TOKEN "
+                "with at least 32 UTF-8 bytes. Protect the connection with TLS."
+            )
+        handler_class = type(
+            "AuthenticatedDashboardHandler",
+            (DashboardHandler,),
+            {
+                "REMOTE_AUTH_REQUIRED": True,
+                "REMOTE_AUTH_TOKEN": token,
+            },
+        )
+    return HTTPServer((bind_host, port), handler_class)
 
 
 def run_server(port=8080, host=None):
     httpd = create_server(port, host)
     bind_host, bind_port = httpd.server_address[:2]
     print(f"[*] ghidra-report Dashboard listening on {bind_host}:{bind_port}")
-    if bind_host in ("127.0.0.1", "::1"):
+    if is_loopback_bind_host(bind_host):
         print(f"[*] Local browser URL: http://localhost:{bind_port}/")
+    else:
+        print("[!] Remote access uses HTTP Basic authentication; put this server behind TLS.")
     print(f"[*] Connected to SQLite database: {DB_PATH}")
     print("[*] Press Ctrl+C to stop.")
     try:
@@ -663,7 +745,7 @@ def parse_args(argv=None):
     parser.add_argument(
         "--host",
         default=os.environ.get("GHIDRA_DASHBOARD_HOST", "127.0.0.1"),
-        help="bind address (default: 127.0.0.1; exposing it is unauthenticated)",
+        help="bind address (default: 127.0.0.1; remote binds require GHIDRA_DASHBOARD_TOKEN)",
     )
     return parser.parse_args(argv)
 

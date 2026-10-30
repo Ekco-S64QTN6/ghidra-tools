@@ -5,6 +5,7 @@ All notable changes to this project are documented here.
 ## [Unreleased]
 
 ### Added
+- Require a 32-byte environment token and HTTP Basic authentication for non-loopback dashboard binds; protect the UI, APIs, and report artifacts while keeping loopback use simple.
 - Recover stack strings only from contiguous immediate P-code stores to verified stack-frame write references; expose method and offset provenance in JSON, with a real-Ghidra positive fixture plus register-immediate, register-derived, and non-contiguous stack-store false-positive controls.
 - Define the capability-rule DSL as strict schema version 1.0.0; assign stable IDs, rationale, and HTTPS ATT&CK references to every shipped rule, and add positive/negative fixtures for all 11 rules.
 - Add function-scoped process-injection detection backed by per-function suspicious API call sites; preserve caller and call-site addresses in an additive `function_api_evidence` JSON field and prevent cross-function evidence aggregation. Instruction/block scopes remain rejected.
@@ -16,6 +17,7 @@ All notable changes to this project are documented here.
 - Preserve detector evidence, recommended and explicitly requested processor IDs, requested loaders, import strategy, and ELF flags in an additive optional JSON `detection` object; assert the provenance against real PE/ELF reports.
 
 ### Fixed
+- Reject unauthenticated remote dashboard binds, classify unknown hostnames conservatively as remote, and disable browser caching of report/dashboard responses.
 - Match a Ghidra stack STORE input to its defining output in the same instruction's P-code array (rather than relying on the unpopulated `Varnode.getDef()` link), and accept only one direct `COPY` from a same-sized constant; register-derived stack stores remain rejected.
 - Use exact case-insensitive API-name matching in capability rules instead of potentially overbroad substring matching.
 - Select Ghidra's mixed-endian ARM language for ELF32 big-endian files carrying `EF_ARM_BE8`, rather than forcing the pure big-endian instruction language.

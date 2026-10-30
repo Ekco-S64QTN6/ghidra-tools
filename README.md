@@ -240,19 +240,29 @@ The history index preserves separate reports by canonical JSON report path. Sear
 ./ghidra-report.sh --dashboard 8080
 ```
 
-The dashboard binds to `127.0.0.1` by default. To opt into a non-loopback
-interface, set `GHIDRA_DASHBOARD_HOST` explicitly:
+The dashboard binds to `127.0.0.1` by default and remains unauthenticated
+on loopback. Every non-loopback bind requires `GHIDRA_DASHBOARD_TOKEN`, a
+random token of at least 32 UTF-8 bytes. The browser prompts for HTTP Basic
+credentials (username `ghidra-report`, password the token); the same
+authentication protects the UI, APIs, and report artifacts.
 
 ```bash
+export GHIDRA_DASHBOARD_TOKEN="$(openssl rand -hex 32)"
 GHIDRA_DASHBOARD_HOST=0.0.0.0 ./ghidra-report.sh --dashboard 8080
 ```
 
-**The dashboard has no authentication.** Only bind it to non-loopback interfaces
-on a trusted, protected network. The Docker Compose configuration binds inside
-the container but publishes the port on host loopback only (`127.0.0.1:8080`);
-change that mapping only when you have an appropriate access-control boundary.
-Report HTML is served with a restrictive CSP sandbox, and artifact routes are
-confined to the canonical `output/` directory.
+The built-in server does not provide TLS. **Never expose its HTTP connection
+directly to an untrusted network.** Put remote access behind an HTTPS reverse
+proxy, VPN, or SSH tunnel; ensure the proxy preserves the `Authorization`
+header. Tokens are read from the environment and are never accepted as command
+line arguments. Unknown hostnames are treated as remote and also require a
+token. Docker Compose binds inside the container but publishes the port on host
+loopback only (`127.0.0.1:8080`); because the container listens on
+`0.0.0.0`, Compose also requires `GHIDRA_DASHBOARD_TOKEN` to be set.
+
+Report HTML is served with a restrictive CSP sandbox, all dashboard responses
+use `Cache-Control: no-store`, and artifact routes are confined to the
+canonical `output/` directory.
 
 ---
 
