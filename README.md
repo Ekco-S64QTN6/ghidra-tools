@@ -378,7 +378,7 @@ Host installs must use a Java runtime supported by the installed Ghidra release.
 docker compose run --rm ghidra-report --batch
 ```
 
-The image pins Ghidra 12.2 and Eclipse Temurin JDK 25, verifies the official release archive checksum, and preconfigures the headless analyzer. `ingress/` and `output/` are bind-mounted. GitHub Actions builds this image and runs a synthetic PE through the real analyzer, checking all seven artifacts and the JSON, SARIF, and MISP envelopes.
+The image pins Ghidra 12.2 and Eclipse Temurin JDK 25, verifies the official release archive checksum, and preconfigures the headless analyzer. `ingress/` and `output/` are bind-mounted. GitHub Actions builds this image, checks synthetic PE/SNES reports and all seven artifacts, validates the JSON/SARIF/MISP envelopes, then runs the broader synthetic integration suite.
 
 ### Packages
 
@@ -396,12 +396,14 @@ For Homebrew/AUR installs, runtime assets stay together under the package's priv
 
 ### CI
 
-`.github/workflows/binary-analysis.yml` runs Python compilation, CLI help, launcher
-regressions, and dashboard security tests without requiring Ghidra. It does not
-run the full Ghidra-backed integration suite or upload SARIF yet. The prior
-upload-only manual job referenced a report it never generated and ignored upload
-failures; SARIF publishing will be re-enabled when CI creates and validates a real
-fixture report.
+`.github/workflows/binary-analysis.yml` has a fast no-Ghidra lane for Python,
+CLI, launcher, parser, and dashboard-security regressions. Its separate pinned
+Ghidra 12.2/JDK 25 container job performs real PE/SNES report smoke tests and
+then runs the broader `tests/run_tests.sh` integration suite using generated
+fixtures. Optional community-loader inventory remains explicitly skipped when
+those extensions are absent; this does not validate extension-backed imports.
+SARIF publishing remains disabled until a complete generated-artifact upload path
+is implemented and tested.
 
 ---
 
@@ -446,15 +448,21 @@ The history-indexer tests verify current/legacy report-field mapping, JSON-path 
 ./tests/run_tests.sh
 ```
 
-This suite generates its PE and SNES fixtures and requires a compatible Ghidra
-installation and Java. Community extensions are optional; `GHIDRA_EXTENSION_ROOT`
-can identify a per-user extension root, and the suite reports extension inventory
-as skipped when seven community extensions are not available. That skip does not
-verify extension-backed loaders. The default CI runs a smaller pinned-container
-PE analysis/report smoke test; running this entire suite in default CI remains
-open roadmap work.
+This suite generates its PE/SNES and file-detection fixtures in temporary
+locations and requires a compatible Ghidra installation and Java. The default
+GitHub Actions container job runs it with pinned Ghidra 12.2 and JDK 25 after the
+focused PE/SNES report smoke checks. Community extensions are optional;
+`GHIDRA_EXTENSION_ROOT` can identify a per-user extension root, and the suite
+reports extension inventory as skipped when seven community extensions are not
+available. That skip does not verify extension-backed loaders.
 
-The broader suite is intended to cover the seven report artifacts, scoring, MISP/SARIF output, SNES header/MMIO/DMA extraction, semantic diffing, firmware carving, history search, capability and trace engines, SVD injection, file-type detection, packaging, and Java compilation. The default CI container job verifies the core PE path and exercises a synthetic SNES ROM through the raw 65816 fallback, checking header, function, MMIO, and DMA evidence alongside the generated report formats. This does not install or validate optional community loaders; the rest of the broader suite and extension-backed paths still require their own passing acceptance checks.
+The suite covers the seven report artifacts, scoring, MISP/SARIF output, SNES
+header/MMIO/DMA extraction, semantic diffing, firmware carving, history search,
+capability and trace engines, SVD injection, file-type detection, packaging, and
+Java compilation. Default CI now executes this extension-free suite in the pinned
+container; the preceding focused smoke separately validates real PE/SNES report
+JSON against the checked-in schema and checks the SARIF/MISP envelopes. Neither
+job installs or validates optional community loaders.
 
 No test reads samples from `ingress/`; fixtures are generated in temporary
 locations, and real analysis samples should remain git-ignored.

@@ -189,3 +189,5 @@ jobs:
           PYTHON
           CONTAINER
 
+      - name: Run full synthetic Ghidra-backed integration suite
+        run: docker run --rm --entrypoint /bin/bash ghidra-report-smoke -s -c 'bash /workspace/tests/run_tests.sh'

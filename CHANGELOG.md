@@ -4,6 +4,9 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+- Run the broader synthetic Ghidra-backed integration suite in the pinned Ghidra 12.2/JDK 25 CI container, and use structurally valid synthetic GBA/N64/PSX headers in file-detection regressions.
+
 ### Fixed
 - Trigger SNES raw 65816 fallback when the optional loader exits nonzero even if its diagnostic text changes; test generic failures and fallback status preservation, and add a real-Ghidra container acceptance path for the generated SNES LoROM fixture.
 - Add root `VERSION` as the canonical app-version source for the CLI banner, headless child environment, SARIF driver metadata, and release archive naming; add a CI consistency check and align formula repository/JDK metadata without pretending unpublished release checksums are available.
@@ -14,7 +17,7 @@ All notable changes to this project are documented here.
 - Pin the container to Ghidra 12.2 with JDK 25, verify the official release SHA-256 before extraction, report detected Ghidra/Java versions, and add an actual core-PE analysis/report integration smoke job.
 - Add mocked regression coverage for standard and Flatpak launcher selection and invalid Java configuration.
 - Restrict dashboard artifact access to canonical paths under `output/`, sandbox exported HTML, escape sample-derived UI values, apply defensive response headers and response limits, and bind to loopback unless explicitly configured.
-- Replace the CI's ignored firmware scan with compile, CLI, launcher, and dashboard security checks; remove the upload-only SARIF job until CI generates the referenced artifact, and document the full-suite limitation.
+- Replace the CI's ignored firmware scan with compile, CLI, launcher, and dashboard security checks; remove the upload-only SARIF job until CI generates and validates a real artifact.
 - Keep `--help` and offline CLI utilities available without Ghidra by checking Ghidra prerequisites only when binary analysis starts.
 - Reject truncated U-Boot uImage payloads whose declared length exceeds the available input and add synthetic bounds regression tests.
 - Normalize top-level array and CAPE-style dynamic traces, preserve event metadata, compare API names case-insensitively, and prevent cross-process attack-chain matches.

@@ -15,8 +15,8 @@ Repository-specific guidance for contributors and coding agents.
 ## Test lanes
 
 - The fast no-Ghidra lane in `.github/workflows/binary-analysis.yml` runs Python/CLI/helper/security regressions.
-- The Ghidra-container job builds the pinned image, analyzes generated synthetic PE and SNES fixtures with real Ghidra, checks all seven non-empty report formats, validates both primary JSON reports against `schemas/report-v1.schema.json`, and checks SARIF 2.1.0/MISP structure. Those last two are envelope checks, not full official schema validation.
-- `tests/run_tests.sh` is a broader suite for a configured Ghidra installation. It reports optional community-extension inventory as skipped when fewer than seven extensions are present; that skip is not evidence of extension-backed loader correctness.
+- The Ghidra-container job builds the pinned image, analyzes generated synthetic PE and SNES fixtures with real Ghidra, checks all seven non-empty report formats, validates both primary JSON reports against `schemas/report-v1.schema.json`, and checks SARIF 2.1.0/MISP structure. It then runs `tests/run_tests.sh` in the same pinned Ghidra 12.2/JDK 25 image. SARIF/MISP checks are envelope checks, not full official schema validation.
+- `tests/run_tests.sh` generates its own fixtures and runs the broader Ghidra-backed integration checks. Optional community-extension inventory is skipped when fewer than seven extensions are present; that skip is not evidence of extension-backed loader correctness.
 - Do not claim a test group passed unless the relevant command or GitHub job actually ran successfully. A fast no-Ghidra pass is not a replacement for container/runtime verification.
 
 ## Output identity, concurrency, and publication
