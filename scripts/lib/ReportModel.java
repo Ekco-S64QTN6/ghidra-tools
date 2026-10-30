@@ -58,6 +58,17 @@ public class ReportModel {
         public String decompiledCode = null;
     }
 
+    /** Detector evidence and the import choices requested by the CLI. */
+    public static class DetectionInfo {
+        public String detectedFormat;
+        public String evidence;
+        public String processorLanguageId;
+        public String selectedProcessorLanguageId;
+        public String requestedLoader;
+        public String importStrategy;
+        public Long elfFlags;
+    }
+
     /** Everything a renderer needs to produce a report, in any format. */
     public static class ReportData {
         public Program program;
@@ -65,6 +76,7 @@ public class ReportModel {
         public boolean isSnes = false;
         public boolean fullDisasm = false;
         public String imphash = null;
+        public DetectionInfo detection = null;
 
         public int riskScore = 0;
         public String riskLevel = "LOW";

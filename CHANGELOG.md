@@ -10,6 +10,7 @@ All notable changes to this project are documented here.
 - Run the broader synthetic Ghidra-backed integration suite in the pinned Ghidra 12.2/JDK 25 CI container, and use structurally valid synthetic GBA/N64/PSX headers in file-detection regressions.
 
 - Add a real Ghidra 12.2 ELF import matrix with synthetic executables that validate the opened language ID in generated JSON reports.
+- Preserve detector evidence, recommended and explicitly requested processor IDs, requested loaders, import strategy, and ELF flags in an additive optional JSON `detection` object; assert the provenance against real PE/ELF reports.
 
 ### Fixed
 - Select Ghidra's mixed-endian ARM language for ELF32 big-endian files carrying `EF_ARM_BE8`, rather than forcing the pure big-endian instruction language.

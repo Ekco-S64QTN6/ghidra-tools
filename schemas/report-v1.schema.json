@@ -85,6 +85,42 @@
       },
       "additionalProperties": true
     },
+    "detection": {
+      "type": "object",
+      "required": [
+        "detected_format",
+        "evidence",
+        "processor_language_id",
+        "selected_processor_language_id",
+        "requested_loader",
+        "import_strategy",
+        "elf_flags"
+      ],
+      "properties": {
+        "detected_format": {
+          "type": "string"
+        },
+        "evidence": {
+          "type": ["string", "null"]
+        },
+        "processor_language_id": {
+          "type": ["string", "null"]
+        },
+        "selected_processor_language_id": {
+          "type": ["string", "null"]
+        },
+        "requested_loader": {
+          "type": ["string", "null"]
+        },
+        "import_strategy": {
+          "type": ["string", "null"]
+        },
+        "elf_flags": {
+          "type": ["integer", "null"]
+        }
+      },
+      "additionalProperties": true
+    },
     "threat_summary": {
       "type": "object",
       "required": [

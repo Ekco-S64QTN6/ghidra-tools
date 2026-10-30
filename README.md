@@ -100,6 +100,16 @@ Concurrent invocations for the same output identity are serialized across projec
 | **`.yar`** | A usable YARA rule built from the imphash, IOC strings and byte sequences from the top-scoring functions. |
 | **`.misp.json`** | A MISP event ready for import into a threat intel platform. |
 
+For JSON consumers, the optional root-level `detection` object preserves the CLI's
+format classification and evidence separately from Ghidra's import result. It includes
+the detector's suggested processor, the processor explicitly passed to Ghidra (if any),
+a requested format loader (if any), the import strategy, and ELF `e_flags` when available.
+The existing `architecture.language_id` remains the actual language of the opened
+Ghidra program. A `detector_deferred` strategy means the CLI intentionally left the
+choice to Ghidra; `existing_project_reused` means the current run did not re-import it.
+The object is additive and optional for direct exporter integrations that do not supply
+detector metadata.
+
 A real triage header, from the packed sample in `ingress/`:
 
 ```

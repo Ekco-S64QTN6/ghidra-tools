@@ -51,6 +51,29 @@ def main():
     pe_report = sample_report()
     validator.validate(pe_report)
 
+    # The additive detection section is optional so older v1 consumers/reports
+    # remain valid, but when present its nullability and numeric flags are typed.
+    detection_report = sample_report()
+    detection_report["detection"] = {
+        "detected_format": "elf",
+        "evidence": "ELF64, little-endian, x86-64, e_flags=0x00000000",
+        "processor_language_id": "x86:LE:64:default",
+        "selected_processor_language_id": "x86:LE:64:default",
+        "requested_loader": None,
+        "import_strategy": "explicit_processor",
+        "elf_flags": 0,
+    }
+    validator.validate(detection_report)
+
+    malformed_detection = copy.deepcopy(detection_report)
+    malformed_detection["detection"]["elf_flags"] = "0x0"
+    try:
+        validator.validate(malformed_detection)
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("schema unexpectedly accepted string-valued detection.elf_flags")
+
     snes_report = sample_report()
     snes_report["snes"] = {
         "title": "SYNTHETIC SNES",
