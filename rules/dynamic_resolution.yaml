@@ -1,7 +1,12 @@
+schema_version: "1.0.0"
+id: "ghidra.dynamic-api-resolution"
 name: "Dynamic API Resolution"
 namespace: "defense-evasion/api-resolution"
 scope: "file"
 meta:
+  rationale: "A library-loading API plus an export or symbol-resolution API jointly indicate dynamic API lookup; legitimate plugin loaders can exhibit the same pair."
+  references:
+    - "https://attack.mitre.org/techniques/T1027/007/"
   att&ck: "T1027.007"
   mbc: "Defense Evasion::Dynamic API Resolution [B0001]"
   weight: 15

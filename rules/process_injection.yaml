@@ -1,7 +1,12 @@
+schema_version: "1.0.0"
+id: "ghidra.process-injection-memory-modification"
 name: "Process Injection via Memory Modification"
 namespace: "host-interaction/process-inject"
-scope: "function"
+scope: "file"
 meta:
+  rationale: "Remote allocation and write, or allocation and execution API combinations describe common injection workflows; each API can also appear in legitimate remote administration tools."
+  references:
+    - "https://attack.mitre.org/techniques/T1055/"
   att&ck: "T1055"
   mbc: "Process::Inject [B0006]"
   weight: 35

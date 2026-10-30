@@ -1,7 +1,12 @@
+schema_version: "1.0.0"
+id: "ghidra.process-shell-execution"
 name: "Process / Shell Execution"
 namespace: "execution/command-execution"
 scope: "file"
 meta:
+  rationale: "Process-creation APIs indicate command or child-process execution but are common in legitimate software and require contextual review."
+  references:
+    - "https://attack.mitre.org/techniques/T1059/"
   att&ck: "T1059"
   mbc: "Execution::Command and Scripting Interpreter [E1059]"
   weight: 25

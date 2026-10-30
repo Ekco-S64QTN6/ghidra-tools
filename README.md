@@ -308,7 +308,7 @@ that reads only from that container.
 |:--|:--|:--|
 | `firmware_carver.py` | `--carve` | Recursive container carving with format-compliant end-offset math — SquashFS, CRAMFS, JFFS2, U-Boot uImage, gzip/zlib. Runs *before* Ghidra so each sub-image can be analyzed on its own. |
 | `svd_injector.py` | `--svd` | Parses vendor CMSIS-SVD XML into peripheral base addresses, register offsets and IRQ vectors for bare-metal ARM Cortex-M / MIPS. |
-| `capability_engine.py` | `--rules` | Evaluates `rules/*.yaml` with AND/OR/NOT and N-of-M logic across instruction, block and function scope. |
+| `capability_engine.py` | `--rules` | Evaluates strict v1.0.0 file-aggregate YAML rules with AND/OR/NOT and N-of-M logic; exact API matching, not capa-compatible. |
 | `trace_correlator.py` | `--trace` | Correlates a CAPE/DRAKVUF sandbox trace against the static import set using a sliding call window, so multi-step behaviours (alloc → write → create thread) match as one capability. |
 | `index_report.py` | *(automatic)* | Indexes each completed JSON report path into `output/reports.db`; separate runs and same-basename inputs remain distinct. Search combines SQLite `LIKE` matches on metadata/APIs/IOCs/indicators with FTS5 search across recovered text, symbols/functions, exports, rules, capabilities, and findings. |
 | `dashboard.py` | `--dashboard` | Standalone `http.server` UI + REST API. Loopback by default; `GHIDRA_DASHBOARD_HOST` opts into another bind address. |
@@ -348,9 +348,20 @@ The core report pipeline, dashboard, carver, indexer, and trace correlator conti
 to use Python's standard library. The Docker image installs the OS-provided
 PyYAML package so `--rules` works there as well.
 
-The current rule engine evaluates features against aggregate report metadata;
-the rule `scope` label is descriptive and does not mean that instruction-, block-,
-or function-level feature extraction is implemented.
+The capability DSL is versioned and validated against
+[`schemas/capability-rule-v1.schema.json`](schemas/capability-rule-v1.schema.json);
+stable IDs, rationales, and HTTPS references are required. Every shipped rule has
+a positive and a negative fixture. Only `scope: "file"` is supported: instruction,
+block, and function scopes are rejected during loading, rather than being accepted
+as labels for aggregate evaluation. API primitives use case-insensitive exact
+function or `library!function` matching; they no longer match arbitrary substrings.
+
+Read [`docs/CAPABILITY_RULES.md`](docs/CAPABILITY_RULES.md) for the DSL contract,
+operators, metadata, and the limits of its file-aggregate evidence. Match output
+includes the rule ID, expression, rationale, references, and
+`evidence_quality: "file_aggregate"`; this is not a probability or calibrated
+confidence value. Call-site addresses and true per-function/basic-block feature
+extraction remain future work.
 
 ### Configuration
 

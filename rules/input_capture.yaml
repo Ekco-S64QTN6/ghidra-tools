@@ -1,7 +1,12 @@
+schema_version: "1.0.0"
+id: "ghidra.input-capture-keylogging"
 name: "Input Capture via Keystroke Logging"
 namespace: "collection/keylogging"
 scope: "file"
 meta:
+  rationale: "Polling keyboard state or installing a global keyboard hook is consistent with input capture, but legitimate hotkey and accessibility software can use these APIs."
+  references:
+    - "https://attack.mitre.org/techniques/T1056/001/"
   att&ck: "T1056.001"
   mbc: "Collection::Keylogging [E1056]"
   weight: 30

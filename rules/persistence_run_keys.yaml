@@ -1,7 +1,12 @@
+schema_version: "1.0.0"
+id: "ghidra.persistence-registry-autostart"
 name: "Persistence via Registry Autostart"
 namespace: "persistence/registry-autostart"
 scope: "file"
 meta:
+  rationale: "A registry mutation paired with a CurrentVersion Run path supports an autostart persistence hypothesis; installers and updaters may legitimately do this."
+  references:
+    - "https://attack.mitre.org/techniques/T1547/001/"
   att&ck: "T1547.001"
   mbc: "Persistence::Registry Run Keys [F0012]"
   weight: 25

@@ -1,7 +1,12 @@
+schema_version: "1.0.0"
+id: "ghidra.anti-debugging-dynamic-resolution"
 name: "Anti-Debugging & Dynamic Resolution"
 namespace: "anti-analysis/anti-debugging"
 scope: "file"
 meta:
+  rationale: "Requiring a module-handle lookup together with a symbol resolver is a stronger static indicator of dynamic API resolution than either import alone; benign plugin systems can still use the same pattern."
+  references:
+    - "https://attack.mitre.org/techniques/T1027/"
   att&ck: "T1027"
   mbc: "Anti-Behavioral Analysis::Dynamic API Resolution [B0024]"
   weight: 20
