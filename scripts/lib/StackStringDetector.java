@@ -129,10 +129,6 @@ public class StackStringDetector {
 
             int operandIndex = reference.getOperandIndex();
             if (operandIndex != 0 || operandIndex >= instruction.getNumOperands()) continue;
-            if (!ghidra.program.model.lang.OperandType.doesWrite(
-                    instruction.getOperandType(operandIndex))) {
-                continue;
-            }
             stackWrites.add((StackReference) reference);
         }
         if (stackWrites.size() != 1) return null;
