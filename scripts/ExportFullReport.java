@@ -399,11 +399,15 @@ public class ExportFullReport extends GhidraScript {
                     if (reference instanceof StackReference && reference.getReferenceType().isWrite()) {
                         hasStackWrite = true;
                         StackReference stackReference = (StackReference) reference;
-                        println("[STACK-PROBE] ref operand=" + reference.getOperandIndex()
+                        int operandIndex = reference.getOperandIndex();
+                        boolean operandWrites = operandIndex >= 0
+                                && operandIndex < probeInstruction.getNumOperands()
+                                && ghidra.program.model.lang.OperandType.doesWrite(
+                                        probeInstruction.getOperandType(operandIndex));
+                        println("[STACK-PROBE] ref operand=" + operandIndex
                                 + " write=" + reference.getReferenceType().isWrite()
                                 + " offset=" + stackReference.getStackOffset()
-                                + " operandWrites=" + ghidra.program.model.lang.OperandType.doesWrite(
-                                        probeInstruction.getOperandType(reference.getOperandIndex())));
+                                + " operandWrites=" + operandWrites);
                     } else if (reference.isStackReference()) {
                         println("[STACK-PROBE] non-StackReference class=" + reference.getClass()
                                 + " operand=" + reference.getOperandIndex()
