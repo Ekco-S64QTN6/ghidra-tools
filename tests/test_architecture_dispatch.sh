@@ -25,7 +25,7 @@ import sys
 root = Path(sys.argv[1])
 manifest = []
 
-def make_elf(elf_class, encoding, machine, length=None):
+def make_elf(elf_class, encoding, machine, length=None, flags=0):
     required = 52 if elf_class == 1 else 64
     data = bytearray(required if length is None else length)
     data[:4] = b"\x7fELF"
@@ -42,7 +42,7 @@ def make_elf(elf_class, encoding, machine, length=None):
         struct.pack_into(endian + "I", data, 20, 1)  # e_version
     flags_offset = 36 if elf_class == 1 else 48
     if len(data) >= flags_offset + 4:
-        struct.pack_into(endian + "I", data, flags_offset, 0)
+        struct.pack_into(endian + "I", data, flags_offset, flags)
     size_offset = 40 if elf_class == 1 else 52
     if len(data) >= size_offset + 2:
         struct.pack_into(endian + "H", data, size_offset, required)
@@ -53,6 +53,7 @@ cases = [
     ("x86-64-le", 2, 1, 62, "x86:LE:64:default", None),
     ("arm-32-le", 1, 1, 40, "ARM:LE:32:v8", None),
     ("arm-32-be", 1, 2, 40, "ARM:BE:32:v8", None),
+    ("arm-32-be8", 1, 2, 40, "ARM:LEBE:32:v8LEInstruction", None),
     ("aarch64-le", 2, 1, 183, "AARCH64:LE:64:v8A", None),
     ("aarch64-be", 2, 2, 183, "AARCH64:BE:64:v8A", None),
     ("mips-32-le", 1, 1, 8, "MIPS:LE:32:default", None),
@@ -74,7 +75,8 @@ cases = [
 
 for name, elf_class, encoding, machine, processor, length in cases:
     path = root / f"{name}.elf"
-    path.write_bytes(make_elf(elf_class, encoding, machine, length))
+    flags = 0x05800000 if name == "arm-32-be8" else 0
+    path.write_bytes(make_elf(elf_class, encoding, machine, length, flags=flags))
     valid_class = elf_class in (1, 2)
     manifest.append((str(path), "elf" if length is None and valid_class else "raw",
                      processor or "none"))
@@ -192,6 +194,6 @@ PYASSERT
     case_count=$((case_count + 1))
 done < "$TMP_DIR/manifest.tsv"
 
-[[ "$case_count" -eq 21 ]] || fail "expected 21 dispatch cases, ran $case_count"
-[[ "$forced_count" -eq 14 ]] || fail "expected 14 explicit processor mappings, got $forced_count"
-pass "21 synthetic inputs exercised production import dispatch; 14 exact Ghidra processor IDs were passed and 7 unsupported cases were left unforced"
+[[ "$case_count" -eq 22 ]] || fail "expected 22 dispatch cases, ran $case_count"
+[[ "$forced_count" -eq 15 ]] || fail "expected 15 explicit processor mappings, got $forced_count"
+pass "22 synthetic inputs exercised production import dispatch; 15 exact Ghidra processor IDs were passed and 7 unsupported cases were left unforced"

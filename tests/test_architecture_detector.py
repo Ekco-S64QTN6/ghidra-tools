@@ -21,7 +21,7 @@ def write_fixture(directory, name, data):
     return path
 
 
-def make_elf(elf_class, data_encoding, machine, length=None):
+def make_elf(elf_class, data_encoding, machine, length=None, flags=0):
     required = 52 if elf_class == 1 else 64
     data = bytearray(length if length is not None else required)
     data[:4] = b"\x7fELF"
@@ -33,6 +33,9 @@ def make_elf(elf_class, data_encoding, machine, length=None):
         struct.pack_into(endian + "H", data, 18, machine)
     if len(data) >= 24:
         struct.pack_into(endian + "I", data, 20, 1)  # e_version = EV_CURRENT
+    flags_offset = 36 if elf_class == 1 else 48
+    if len(data) >= flags_offset + 4:
+        struct.pack_into(endian + "I", data, flags_offset, flags)
     header_size_offset = 40 if elf_class == 1 else 52
     if len(data) >= header_size_offset + 2:
         struct.pack_into(endian + "H", data, header_size_offset, required)  # e_ehsize
@@ -74,6 +77,7 @@ class ArchitectureDetectorTests(unittest.TestCase):
             (1, 1, 3, "x86:LE:32:default"),
             (2, 1, 62, "x86:LE:64:default"),
             (1, 1, 40, "ARM:LE:32:v8"),
+            (1, 2, 40, "ARM:BE:32:v8"),
             (2, 1, 183, "AARCH64:LE:64:v8A"),
             (1, 2, 8, "MIPS:BE:32:default"),
             (1, 1, 8, "MIPS:LE:32:default"),
@@ -90,6 +94,29 @@ class ArchitectureDetectorTests(unittest.TestCase):
                     result = detector.inspect_file(path)
                     self.assertEqual(result["format"], "elf")
                     self.assertEqual(result["processor"], expected)
+
+    def test_arm_be8_flags_select_mixed_endian_instruction_language(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = write_fixture(
+                temp,
+                "arm-be8.elf",
+                make_elf(1, 2, 40, flags=0x05800000),  # EABI5 | EF_ARM_BE8
+            )
+            result = detector.inspect_file(path)
+            self.assertEqual(result["format"], "elf")
+            self.assertEqual(result["processor"], "ARM:LEBE:32:v8LEInstruction")
+            self.assertEqual(result["e_flags"], 0x05800000)
+            self.assertIn("e_flags=0x05800000", result["evidence"])
+
+    def test_arm_big_endian_without_be8_keeps_big_endian_instructions(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = write_fixture(
+                temp,
+                "arm-be.elf",
+                make_elf(1, 2, 40, flags=0x05000000),  # EABI5, EF_ARM_BE8 clear
+            )
+            result = detector.inspect_file(path)
+            self.assertEqual(result["processor"], "ARM:BE:32:v8")
 
     def test_unknown_machine_is_elf_but_does_not_guess_a_processor(self):
         with tempfile.TemporaryDirectory() as temp:

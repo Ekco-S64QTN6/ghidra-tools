@@ -120,11 +120,17 @@ def inspect_elf(path):
 
     machine = struct.unpack(endian + "H", header[18:20])[0]
     elf_bits = 32 if elf_class == 1 else 64
+    flags_offset = 36 if elf_class == 1 else 48
+    elf_flags = struct.unpack_from(endian + "I", header, flags_offset)[0]
     processor = ELF_LANGUAGES.get(machine, {}).get((elf_class, data_encoding))
+    # EF_ARM_BE8 means big-endian ELF data with little-endian ARM instructions.
+    # Ghidra models this with a mixed-endian language, not the pure BE language.
+    if machine == 40 and elf_class == 1 and data_encoding == 2 and elf_flags & 0x00800000:
+        processor = "ARM:LEBE:32:v8LEInstruction"
     machine_name = ELF_NAMES.get(machine, f"e_machine={machine}")
     endian_name = "little-endian" if data_encoding == 1 else "big-endian"
 
-    evidence = f"ELF{elf_bits}, {endian_name}, {machine_name}"
+    evidence = f"ELF{elf_bits}, {endian_name}, {machine_name}, e_flags=0x{elf_flags:08X}"
     if processor:
         evidence += f" -> {processor}"
     else:
@@ -135,6 +141,7 @@ def inspect_elf(path):
         "class": elf_bits,
         "byte_order": endian_name,
         "e_machine": machine,
+        "e_flags": elf_flags,
         "machine_name": machine_name,
         "processor": processor,
         "evidence": evidence,
