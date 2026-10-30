@@ -267,6 +267,10 @@ import_and_analyze() {
 
             if [ "$fallback_status" -ne 0 ] || grep -Eq "Import failed|No load spec found|could not successfully load" "$import_log"; then
                 log_error "Import failed even with raw 65816 fallback (exit status: $fallback_status)."
+                if [ -s "$import_log" ]; then
+                    log_error "Last 80 lines of Ghidra fallback output:"
+                    tail -n 80 "$import_log" >&2
+                fi
                 rm -f "$import_log"
                 if [ "$fallback_status" -ne 0 ]; then
                     return "$fallback_status"

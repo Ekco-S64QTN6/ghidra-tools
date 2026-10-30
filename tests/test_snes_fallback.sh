@@ -110,6 +110,7 @@ else
 fi
 [[ "$status" -eq 43 ]] || fail "raw fallback failure status changed (expected 43, got $status)"
 grep -Fq "Import failed even with raw 65816 fallback" "$TMP_DIR/fallback-failure.log" || fail "raw fallback failure diagnostic missing"
-pass "raw fallback failure remains a nonzero failure"
+grep -Fq "Raw import selected with 65816" "$TMP_DIR/fallback-failure.log" || fail "raw fallback headless log was not retained in failure output"
+pass "raw fallback failure remains nonzero and preserves bounded headless diagnostics"
 
 echo "Passed SNES fallback regression groups."

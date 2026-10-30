@@ -8,6 +8,7 @@ All notable changes to this project are documented here.
 - Run the broader synthetic Ghidra-backed integration suite in the pinned Ghidra 12.2/JDK 25 CI container, and use structurally valid synthetic GBA/N64/PSX headers in file-detection regressions.
 
 ### Fixed
+- Print the last 80 lines of the raw Ghidra fallback log when SNES fallback fails, and assert that bounded diagnostic output is retained in the mocked failure regression.
 - Trigger SNES raw 65816 fallback when the optional loader exits nonzero even if its diagnostic text changes; test generic failures and fallback status preservation, and add a real-Ghidra container acceptance path for the generated SNES LoROM fixture.
 - Add root `VERSION` as the canonical app-version source for the CLI banner, headless child environment, SARIF driver metadata, and release archive naming; add a CI consistency check and align formula repository/JDK metadata without pretending unpublished release checksums are available.
 - Keep Homebrew/AUR runtime assets together under private app roots, add package launchers that route writable state to XDG user data, vendor a pinned pure-Python PyYAML copy for Homebrew, and test wrapper argument/data-path behavior.
