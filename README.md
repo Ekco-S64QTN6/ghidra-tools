@@ -422,6 +422,7 @@ python3 tests/test_report_format.py
 python3 tests/test_version_consistency.py
 python3 tests/test_package_layout.py
 python3 tests/test_architecture_detector.py
+bash tests/test_architecture_dispatch.sh
 python3 tests/test_project_identity.py
 ./ghidra-report.sh --help >/dev/null
 bash tests/test_run_headless.sh
