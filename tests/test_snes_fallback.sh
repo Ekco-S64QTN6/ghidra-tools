@@ -23,10 +23,10 @@ python3 - "$SCRIPT_DIR/ghidra-report.sh" "$TMP_DIR/import_function.sh" <<'PY'
 import sys
 source_path, output_path = sys.argv[1:]
 source = open(source_path, encoding="utf-8").read()
-start = source.find("import_and_analyze() {")
+start = source.find("set_detection_provenance() {")
 end = source.find("\n# Generate reports from an existing Ghidra project", start)
 if start < 0 or end < 0:
-    raise SystemExit("could not isolate import_and_analyze()")
+    raise SystemExit("could not isolate detection and import functions")
 with open(output_path, "w", encoding="utf-8") as handle:
     handle.write(source[start:end] + "\n")
 PY
