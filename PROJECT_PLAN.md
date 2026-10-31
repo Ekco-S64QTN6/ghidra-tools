@@ -198,9 +198,9 @@ intentional change is correct `&amp;` escaping in HTML headings that previously 
 
 Extend to firmware and embedded systems common in IoT and hardware security assessments.
 
-### Deep Boundary Detection & Firmware Extraction (Unblob Integration)
-- [x] **Format Carving Pipeline** (`scripts/firmware_carver.py`, `--carve`) — pre-Ghidra extraction pass using format-compliant end-offset calculations to recursively carve SquashFS, CRAMFS, U-Boot uImage, JFFS2, and GZIP streams
-- [x] **Kernel & Bootloader Separation** — identify and extract compressed kernels (GZIP, zlib) and U-Boot stages with metadata decoding (OS, Arch, Type, Entry Point)
+### Deep Boundary Detection & Firmware Extraction (custom scanner; not an Unblob integration)
+- [x] **Format Carving Pipeline** (`scripts/firmware_carver.py`, `--carve`) — pre-Ghidra extraction of bounded SquashFS, CRAMFS, JFFS2 node, U-Boot uImage, GZIP, and embedded ELF regions; nested GZIP output is rescanned under explicit depth/file/byte/ratio/time budgets
+- [x] **Kernel & Bootloader Metadata** — identify U-Boot OS/architecture/type/entry-point fields and stream-decompress GZIP-compressed uImage payloads when they fit configured limits; zlib-stream extraction and filesystem-internal recursion are not implemented
 
 ### Hardware Memory Mapping & SVD Injection
 - [x] **CMSIS-SVD Peripheral Injection** (`scripts/svd_injector.py`, `--svd`) — ingest vendor XML SVD files to map hardware peripherals, base addresses, register bitfields, and interrupt vectors for bare-metal ARM Cortex-M and MIPS targets
