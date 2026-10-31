@@ -1,0 +1,22 @@
+(dashboard_proxy) {
+    # The dashboard handles Basic auth itself. Keep Authorization intact.
+    # Delete client-supplied proxy identity before forwarding upstream.
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "no-referrer"
+        X-Frame-Options "DENY"
+        -Server
+    }
+
+    reverse_proxy ghidra-report:8080 {
+        header_up -Forwarded
+        header_up -X-Forwarded-For
+        header_up -X-Forwarded-Host
+        header_up -X-Forwarded-Proto
+    }
+}
+
+{$DASHBOARD_DOMAIN} {
+    import dashboard_proxy
+}

@@ -100,6 +100,8 @@ jobs:
 
       - name: Test dashboard security and HTTP behavior
         run: python3 tests/test_dashboard_security.py
+      - name: Test live HTTPS dashboard proxy (Caddy)
+        run: python3 tests/test_dashboard_proxy.py
 
       - name: Test bounded firmware carving
         run: python3 tests/test_firmware_carver.py
