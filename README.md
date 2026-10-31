@@ -379,7 +379,7 @@ GHIDRA_CARVE_MAX_TOTAL_BYTES=536870912 \
 ./ghidra-report.sh --carve firmware.bin
 ```
 
-Invalid, zero, or negative limits are rejected. GZIP streams that exceed the
+Invalid, non-finite, zero, or negative limits are rejected. GZIP streams that exceed the
 expansion ratio or contain truncated/invalid trailers are not extracted.
 SquashFS and CRAMFS are carved as opaque filesystem images; this tool does not
 yet recursively parse their internal filesystems or UBI volumes, and it does
