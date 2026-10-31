@@ -77,3 +77,18 @@ Upload `report_latest.sarif` directly to GitHub Security tab:
     sarif_file: output/<binary_name>/report_latest.sarif
     category: ghidra-binary-triage
 ```
+
+
+## 4. Dynamic trace correlation and evidence quality
+
+Correlate a runtime trace with a selected static JSON report:
+
+\`\`\`bash
+./ghidra-report.sh --trace sandbox-trace.json output/<sample-key>/report_latest.json
+\`\`\`
+
+New report JSON includes an additive \`static_apis\` array containing **all** imported API names and libraries; \`suspicious_apis\` remains the narrower heuristic-scoring subset. The correlator reports imported-and-observed APIs, static imports not seen in the trace, and runtime API names absent from the static import inventory as separate groups.
+
+An API absent from the import table is **not by itself evidence of dynamic resolution**. The \`dynamically_resolved_apis\` and \`dynamic_resolution_evidence\` fields are populated only when the trace contains a named \`GetProcAddress\`, \`LdrGetProcedureAddress\`, \`dlsym\`, or \`dlvsym\` resolver argument and a later call to that exact symbol in the same process. Each attack-chain match also carries indexed event evidence so downstream consumers can inspect the actual process-scoped calls.
+
+When both the static report and trace expose SHA-256 values, provenance is \`match\` or \`mismatch\`; otherwise it is \`unknown\`. A mismatch is explicitly warned about, and unknown provenance must not be treated as proof that the trace came from the analyzed sample. Trace metadata includes a source/run identifier when common CAPE-style fields are present.

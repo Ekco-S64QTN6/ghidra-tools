@@ -51,6 +51,23 @@ def main():
     pe_report = sample_report()
     validator.validate(pe_report)
 
+    # All imported APIs are an additive v1 field; suspicious_apis remains narrower.
+    static_api_report = sample_report()
+    static_api_report["static_apis"] = [
+        {"function": "CreateFileW", "library": "KERNEL32.dll"},
+        {"function": "GetModuleHandleA", "library": "KERNEL32.dll"},
+    ]
+    validator.validate(static_api_report)
+
+    malformed_static_api = copy.deepcopy(static_api_report)
+    malformed_static_api["static_apis"][0]["function"] = 123
+    try:
+        validator.validate(malformed_static_api)
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("schema unexpectedly accepted a non-string static API name")
+
     # The additive detection section is optional so older v1 consumers/reports
     # remain valid, but when present its nullability and numeric flags are typed.
     detection_report = sample_report()

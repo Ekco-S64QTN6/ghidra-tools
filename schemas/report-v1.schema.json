@@ -260,6 +260,18 @@
         "additionalProperties": true
       }
     },
+    "static_apis": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["function", "library"],
+        "properties": {
+          "function": { "type": "string" },
+          "library": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
     "iocs": {
       "type": "array",
       "items": {

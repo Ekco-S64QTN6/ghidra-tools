@@ -351,7 +351,7 @@ that reads only from that container.
 | `firmware_carver.py` | `--carve` | Memory-mapped scan and bounded extraction of SquashFS, CRAMFS, CRC-validated JFFS2 inode/directory-entry nodes, CRC-validated U-Boot uImage, GZIP streams, and embedded ELF. Nested GZIP output is rescanned recursively; extracted sub-images are left for a separate analysis invocation. |
 | `svd_injector.py` | `--svd` | Parses vendor CMSIS-SVD XML into peripheral base addresses, register offsets and IRQ vectors for bare-metal ARM Cortex-M / MIPS. |
 | `capability_engine.py` | `--rules` | Evaluates strict v1.0.0 YAML rules with file-aggregate and API-only function scopes, AND/OR/NOT and N-of-M logic; exact API matching, not capa-compatible. |
-| `trace_correlator.py` | `--trace` | Correlates a CAPE/DRAKVUF sandbox trace against the static import set using a sliding call window, so multi-step behaviours (alloc → write → create thread) match as one capability. |
+| `trace_correlator.py` | `--trace` | Correlates sandbox calls against all static imports, reports same-process API-chain evidence, distinguishes unmatched runtime APIs from explicitly corroborated resolver calls, and records trace/sample SHA-256 provenance when available. |
 | `index_report.py` | *(automatic)* | Indexes each completed JSON report path into `output/reports.db`; separate runs and same-basename inputs remain distinct. Search combines SQLite `LIKE` matches on metadata/APIs/IOCs/indicators with FTS5 search across recovered text, symbols/functions, exports, rules, capabilities, and findings. |
 | `dashboard.py` | `--dashboard` | Standalone `http.server` UI + REST API. Loopback by default; `GHIDRA_DASHBOARD_HOST` opts into another bind address. |
 

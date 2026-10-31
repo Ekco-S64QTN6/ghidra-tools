@@ -10,6 +10,7 @@ import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -68,6 +69,27 @@ public class JsonReportWriter {
                 ReportModel.ImportEntry imp = d.suspiciousImports.get(i);
                 out.print("    {\"function\": \"" + escapeJson(imp.function) + "\", \"library\": \"" + escapeJson(imp.library) + "\", \"mitre\": \"" + escapeJson(imp.mitreTechnique) + "\", \"category\": \"" + escapeJson(imp.threatCategory) + "\"}");
                 out.println(i < d.suspiciousImports.size() - 1 ? "," : "");
+            }
+            out.println("  ],");
+
+            // Preserve the complete static import surface separately from the
+            // narrower suspicious_apis list used by threat scoring.
+            List<ReportModel.ImportEntry> allStaticApis = new ArrayList<>();
+            for (List<ReportModel.ImportEntry> libraryEntries : d.importsByLib.values()) {
+                allStaticApis.addAll(libraryEntries);
+            }
+            allStaticApis.sort(
+                    Comparator.comparing((ReportModel.ImportEntry entry) -> entry.library == null ? "" : entry.library,
+                                    String.CASE_INSENSITIVE_ORDER)
+                            .thenComparing(entry -> entry.function == null ? "" : entry.function,
+                                    String.CASE_INSENSITIVE_ORDER)
+            );
+            out.println("  \"static_apis\": [");
+            for (int i = 0; i < allStaticApis.size(); i++) {
+                ReportModel.ImportEntry imp = allStaticApis.get(i);
+                out.print("    {\"function\": \"" + escapeJson(imp.function)
+                        + "\", \"library\": \"" + escapeJson(imp.library) + "\"}");
+                out.println(i < allStaticApis.size() - 1 ? "," : "");
             }
             out.println("  ],");
 

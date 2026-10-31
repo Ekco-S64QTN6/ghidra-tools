@@ -5,6 +5,7 @@ All notable changes to this project are documented here.
 ## [Unreleased]
 
 ### Added
+- Emit the complete static import inventory in report JSON and improve trace correlation with exact API identity, resolver/use evidence, process-scoped chain events, and sample/trace SHA-256 provenance.
 - Add mmap-backed firmware scanning and bounded recursive GZIP extraction with configurable depth, file-count, file-size, aggregate-size, expansion-ratio, and wall-time limits; retain source/parent provenance and stream output through temporary files.
 - Add an opt-in Caddy HTTPS reverse-proxy profile for Docker Compose, with automatic certificate management, unchanged Basic-auth forwarding, defensive forwarding-header handling, and a live TLS integration test.
 - Require a 32-byte environment token and HTTP Basic authentication for non-loopback dashboard binds; protect the UI, APIs, and report artifacts while keeping loopback use simple.

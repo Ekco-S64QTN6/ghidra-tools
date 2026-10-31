@@ -131,6 +131,29 @@ else
     log_fail "Function-scoped API call evidence was missing or incomplete"
 fi
 
+# The static import inventory must be broader than the suspicious-only scoring subset.
+if python3 - "$REP_DIR/report_latest.json" <<'PYSTATICAPIS'
+import json
+import sys
+with open(sys.argv[1], encoding="utf-8") as handle:
+    report = json.load(handle)
+static_apis = report.get("static_apis")
+assert isinstance(static_apis, list), "static_apis is missing or not an array"
+assert static_apis, "static import inventory is unexpectedly empty"
+assert all(isinstance(item.get("function"), str) and isinstance(item.get("library"), str)
+           for item in static_apis), static_apis
+static_keys = {(item["library"].casefold(), item["function"].casefold()) for item in static_apis}
+suspicious = report.get("suspicious_apis", [])
+assert all((item["library"].casefold(), item["function"].casefold()) in static_keys
+           for item in suspicious), suspicious
+assert any(item["function"] == "GetModuleHandleA" for item in static_apis), static_apis
+PYSTATICAPIS
+then
+    log_pass "JSON report exposes all static imports separately from suspicious APIs"
+else
+    log_fail "Complete static API inventory was missing or inconsistent"
+fi
+
 # Verify that printable strings are recovered only from contiguous immediate writes
 # to stack-frame offsets, not from ordinary register-immediate MOV instructions.
 if python3 - "$REP_DIR/report_latest.json" <<'PYSTACK'
@@ -299,7 +322,7 @@ fi
 # 9. Test Dynamic Sandbox Trace Correlator
 log_test "Testing Dynamic Sandbox Trace Correlator (--trace)..."
 TRACE_TMP="$SCRIPT_DIR/scratch_trace_test.json"
-echo '{"calls": [{"api": "GetModuleHandleA"}, {"api": "VirtualAllocEx"}, {"api": "WriteProcessMemory"}, {"api": "CreateRemoteThread"}]}' > "$TRACE_TMP"
+echo '{"calls": [{"api": "GetModuleHandleA", "process_id": 123}, {"api": "VirtualAllocEx", "process_id": 123}, {"api": "WriteProcessMemory", "process_id": 123}, {"api": "CreateRemoteThread", "process_id": 123}]}' > "$TRACE_TMP"
 TRACE_OUT="$("$SCRIPT_DIR/ghidra-report.sh" --trace "$TRACE_TMP" "$PE_OUTPUT_KEY" 2>&1)"
 rm -f "$TRACE_TMP"
 if echo "$TRACE_OUT" | grep -q "Classic Process Injection" && echo "$TRACE_OUT" | grep -q "GetModuleHandleA"; then
