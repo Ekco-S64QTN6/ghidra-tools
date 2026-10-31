@@ -260,6 +260,38 @@ token. Docker Compose binds inside the container but publishes the port on host
 loopback only (`127.0.0.1:8080`); because the container listens on
 `0.0.0.0`, Compose also requires `GHIDRA_DASHBOARD_TOKEN` to be set.
 
+#### HTTPS deployment with Docker Compose and Caddy
+
+For a public HTTPS endpoint, create a DNS A/AAAA record for the server and allow
+inbound TCP ports 80 and 443 (plus UDP 443 for HTTP/3). Then start the optional
+Caddy profile:
+
+```bash
+export DASHBOARD_DOMAIN="dashboard.example.com"
+export GHIDRA_DASHBOARD_TOKEN="$(openssl rand -hex 32)"
+docker compose --profile https up -d --build
+```
+
+Open `https://$DASHBOARD_DOMAIN/`; the browser's HTTP Basic prompt uses
+username `ghidra-report` and the token as its password. Caddy obtains and
+renews the public certificate automatically. Keep the named `caddy_data` and
+`caddy_config` volumes so certificate and ACME state persist. The dashboard's
+direct host mapping remains loopback-only at `127.0.0.1:8080`; only Caddy
+publishes ports 80/443.
+
+The proxy configuration preserves `Authorization` for the dashboard's Basic
+authentication, removes client-supplied `Forwarded` and `X-Forwarded-*`
+overrides, and adds HTTPS response headers. The dashboard does not use forwarded
+headers for authentication, host selection, or URL generation. Do not add a
+broad `trusted_proxies` range or an authentication-header rewrite. When another
+load balancer sits in front of Caddy, review and configure its trust boundary
+separately rather than trusting arbitrary client forwarding headers.
+
+The live proxy regression is `python3 tests/test_dashboard_proxy.py` (Docker
+Engine required). It runs Caddy with a local test CA and verifies TLS termination,
+the Basic-auth challenge/credential pass-through, and response headers. It does
+not validate public ACME issuance or renewal against your deployment's DNS.
+
 Report HTML is served with a restrictive CSP sandbox, all dashboard responses
 use `Cache-Control: no-store`, and artifact routes are confined to the
 canonical `output/` directory.
@@ -447,7 +479,7 @@ is implemented and tested.
 
 ### Fast checks (no Ghidra required)
 
-These are the deterministic checks run by the default GitHub Actions workflow. To run the Python checks locally, install `requirements-rules.txt` and `requirements-test.txt`; the Java escaping regression also needs `javac` and `java` on `PATH`. Ghidra is not required for this lane.
+These checks run in the default GitHub Actions workflow. To run the Python checks locally, install `requirements-rules.txt` and `requirements-test.txt`; the Java escaping regression also needs `javac` and `java` on `PATH`, and the live Caddy HTTPS proxy regression needs Docker Engine. Ghidra is not required for this lane.
 
 ```bash
 python3 -m compileall -q scripts tests
@@ -466,6 +498,7 @@ bash tests/test_snes_fallback.sh
 bash tests/test_report_generation.sh
 bash tests/test_batch_runner.sh
 python3 tests/test_dashboard_security.py
+python3 tests/test_dashboard_proxy.py  # requires Docker Engine
 python3 tests/test_firmware_carver.py
 python3 tests/test_trace_correlator.py
 python3 tests/test_history_indexer.py
