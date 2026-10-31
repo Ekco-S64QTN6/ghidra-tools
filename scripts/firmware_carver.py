@@ -17,6 +17,7 @@ import struct
 import zlib
 import json
 import time
+import math
 import mmap
 from dataclasses import dataclass
 
@@ -44,10 +45,10 @@ class CarveLimits:
             raise ValueError("GHIDRA_CARVE_MAX_FILE_BYTES must be >= 1")
         if self.max_total_bytes < 1:
             raise ValueError("GHIDRA_CARVE_MAX_TOTAL_BYTES must be >= 1")
-        if self.max_compression_ratio < 1:
-            raise ValueError("GHIDRA_CARVE_MAX_COMPRESSION_RATIO must be >= 1")
-        if self.timeout_seconds <= 0:
-            raise ValueError("GHIDRA_CARVE_TIMEOUT_SECONDS must be > 0")
+        if not math.isfinite(self.max_compression_ratio) or self.max_compression_ratio < 1:
+            raise ValueError("GHIDRA_CARVE_MAX_COMPRESSION_RATIO must be finite and >= 1")
+        if not math.isfinite(self.timeout_seconds) or self.timeout_seconds <= 0:
+            raise ValueError("GHIDRA_CARVE_TIMEOUT_SECONDS must be finite and > 0")
 
     @classmethod
     def from_env(cls):
