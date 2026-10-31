@@ -188,6 +188,11 @@ class Jffs2IntegrityTests(unittest.TestCase):
         self.assertIsNotNone(found)
         self.assertEqual(found["node_kind"], "inode")
 
+    def test_rejects_other_node_families_even_with_valid_common_header(self):
+        data = bytearray(struct.pack("<HHII", 0x1985, 0xE008, 12, 0))
+        struct.pack_into("<I", data, 8, jffs2_crc32(data[:8]))
+        self.assertIsNone(firmware_carver.parse_jffs2(data, 0))
+
     def test_inode_rejects_corrupt_common_header_crc(self):
         data = bytearray(make_jffs2_inode())
         data[8] ^= 0x01
