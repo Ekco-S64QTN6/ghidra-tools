@@ -5,6 +5,7 @@ All notable changes to this project are documented here.
 ## [Unreleased]
 
 ### Added
+- Export the complete external static import table in an optional additive report-v1 `imports` array while retaining heuristic-tagged `suspicious_apis`; use it for more accurate runtime trace correlation.
 - Add mmap-backed firmware scanning and bounded recursive GZIP extraction with configurable depth, file-count, file-size, aggregate-size, expansion-ratio, and wall-time limits; retain source/parent provenance and stream output through temporary files.
 - Add an opt-in Caddy HTTPS reverse-proxy profile for Docker Compose, with automatic certificate management, unchanged Basic-auth forwarding, defensive forwarding-header handling, and a live TLS integration test.
 - Require a 32-byte environment token and HTTP Basic authentication for non-loopback dashboard binds; protect the UI, APIs, and report artifacts while keeping loopback use simple.
@@ -19,6 +20,7 @@ All notable changes to this project are documented here.
 - Preserve detector evidence, recommended and explicitly requested processor IDs, requested loaders, import strategy, and ELF flags in an additive optional JSON `detection` object; assert the provenance against real PE/ELF reports.
 
 ### Fixed
+- Compare runtime APIs against the complete available import table, require exact case-insensitive API identity and a process ID for attack-chain matches, and include matched trace events as evidence; do not treat APIs absent from the import table as proof of dynamic resolution.
 - Validate SquashFS v3/v4 superblock endianness, block geometry, version, root metadata offset, and declared filesystem bounds; validate CRAMFS v2 superblock size, flags, signature policy, root inode type, and root-data bounds.
 - Validate JFFS2 INODE/DIRENT header and node CRCs plus compressed-data/name CRCs using Linux crc32_le(seed=0); reject malformed node lengths and corrupted records.
 - Reject legacy U-Boot uImages with invalid header or payload CRC-32 values; compute payload checksums in bounded chunks before carving.

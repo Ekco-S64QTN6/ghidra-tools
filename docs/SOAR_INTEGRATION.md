@@ -67,7 +67,33 @@ The payload delivers:
 
 ---
 
-## 3. GitHub Code Scanning & CI/CD Integration
+## 3. Static / Runtime Trace Correlation
+
+Use a trace captured from the same sample build as the Ghidra report:
+
+```bash
+./ghidra-report.sh --trace trace.json output/<report-key>/report_latest.json
+```
+
+The report's additive `imports` array contains all external static imports.
+Older report-v1 files do not have that field and are compared using only
+`suspicious_apis`; inspect `static_imports_complete` in the JSON result before
+interpreting absent or unobserved APIs. `confirmed_apis` are imported and
+observed, `dormant_apis` are available static imports not observed by the
+trace, and `not_in_static_imports` are runtime names absent from the available
+static set. An API absent from the import table may have been dynamically
+resolved, obtained from another module/source, or observed in a trace from a
+different build; absence alone is not a dynamic-resolution finding.
+
+Process-chain matches require a process ID and include the exact normalized
+event slice in `evidence_calls`. The correlator does not validate trace sample
+hashes or prove that the trace and static report refer to identical bytes.
+Check the trace's collection metadata and sample SHA-256 before triggering
+containment or other automated actions.
+
+---
+
+## 4. GitHub Code Scanning & CI/CD Integration
 
 Upload `report_latest.sarif` directly to GitHub Security tab:
 ```yaml
