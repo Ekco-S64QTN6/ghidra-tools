@@ -223,6 +223,17 @@ class RecursiveBudgetTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "GHIDRA_CARVE_MAX_FILES"):
                 firmware_carver.CarveLimits.from_env()
 
+        for name, value in (
+            ("GHIDRA_CARVE_MAX_COMPRESSION_RATIO", "nan"),
+            ("GHIDRA_CARVE_MAX_COMPRESSION_RATIO", "inf"),
+            ("GHIDRA_CARVE_TIMEOUT_SECONDS", "nan"),
+            ("GHIDRA_CARVE_TIMEOUT_SECONDS", "inf"),
+        ):
+            with self.subTest(name=name, value=value):
+                with patch.dict(os.environ, {name: value}):
+                    with self.assertRaisesRegex(ValueError, name):
+                        firmware_carver.CarveLimits.from_env()
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
