@@ -345,6 +345,11 @@ def _open_mapped(path):
         raise
 
 
+def _jffs2_crc32(data, crc=0):
+    """Linux crc32_le() convention used by JFFS2 (no initial/final XOR)."""
+    return (zlib.crc32(data, crc ^ 0xFFFFFFFF) ^ 0xFFFFFFFF) & 0xFFFFFFFF
+
+
 def _jffs2_pad4(length):
     return (length + 3) & ~3
 
@@ -383,7 +388,7 @@ def parse_jffs2(data, offset, deadline=None):
     if padded_length > available:
         return None
 
-    calculated_header_crc = zlib.crc32(data[offset:offset + 8]) & 0xFFFFFFFF
+    calculated_header_crc = _jffs2_crc32(data[offset:offset + 8])
     if header_crc != calculated_header_crc:
         return None
 
@@ -397,13 +402,13 @@ def parse_jffs2(data, offset, deadline=None):
 
         node_crc = struct.unpack_from(endian + "I", data, offset + 32)[0]
         name_crc = struct.unpack_from(endian + "I", data, offset + 36)[0]
-        calculated_node_crc = zlib.crc32(data[offset:offset + 32]) & 0xFFFFFFFF
+        calculated_node_crc = _jffs2_crc32(data[offset:offset + 32])
         if node_crc != calculated_node_crc:
             return None
 
         raw_name = data[offset + fixed_size:offset + fixed_size + name_size]
         name = raw_name.split(b"\x00", 1)[0]
-        calculated_name_crc = zlib.crc32(name) & 0xFFFFFFFF
+        calculated_name_crc = _jffs2_crc32(name)
         if name_crc != calculated_name_crc:
             return None
 
@@ -435,7 +440,7 @@ def parse_jffs2(data, offset, deadline=None):
 
     data_crc = struct.unpack_from(endian + "I", data, offset + 60)[0]
     node_crc = struct.unpack_from(endian + "I", data, offset + 64)[0]
-    calculated_node_crc = zlib.crc32(data[offset:offset + 60]) & 0xFFFFFFFF
+    calculated_node_crc = _jffs2_crc32(data[offset:offset + 60])
     if node_crc != calculated_node_crc:
         return None
 
@@ -445,11 +450,10 @@ def parse_jffs2(data, offset, deadline=None):
     while payload_cursor < payload_end:
         _check_deadline(deadline)
         chunk_end = min(payload_cursor + CHUNK_BYTES, payload_end)
-        calculated_data_crc = zlib.crc32(
+        calculated_data_crc = _jffs2_crc32(
             data[payload_cursor:chunk_end], calculated_data_crc
         )
         payload_cursor = chunk_end
-    calculated_data_crc &= 0xFFFFFFFF
     if data_crc != calculated_data_crc:
         return None
 
