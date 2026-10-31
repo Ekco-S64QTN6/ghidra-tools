@@ -320,10 +320,10 @@ fi
 # 9. Test Dynamic Sandbox Trace Correlator
 log_test "Testing Dynamic Sandbox Trace Correlator (--trace)..."
 TRACE_TMP="$SCRIPT_DIR/scratch_trace_test.json"
-echo '{"calls": [{"api": "GetModuleHandleA"}, {"api": "VirtualAllocEx"}, {"api": "WriteProcessMemory"}, {"api": "CreateRemoteThread"}]}' > "$TRACE_TMP"
+echo '{"calls": [{"api": "GetModuleHandleA", "process_id": 1}, {"api": "VirtualAllocEx", "process_id": 1}, {"api": "WriteProcessMemory", "process_id": 1}, {"api": "CreateRemoteThread", "process_id": 1}]}' > "$TRACE_TMP"
 TRACE_OUT="$("$SCRIPT_DIR/ghidra-report.sh" --trace "$TRACE_TMP" "$PE_OUTPUT_KEY" 2>&1)"
 rm -f "$TRACE_TMP"
-if echo "$TRACE_OUT" | grep -q "Classic Process Injection" && echo "$TRACE_OUT" | grep -q "GetModuleHandleA"; then
+if echo "$TRACE_OUT" | grep -q "Classic Process Injection" && echo "$TRACE_OUT" | grep -q "GetModuleHandleA" && echo "$TRACE_OUT" | grep -q "Process ID: 1" && echo "$TRACE_OUT" | grep -q "VirtualAllocEx"; then
     log_pass "Trace correlator detected sliding window injection sequence and confirmed APIs"
 else
     log_fail "Trace correlator test failed"
