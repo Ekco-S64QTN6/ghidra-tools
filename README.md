@@ -385,8 +385,9 @@ uImages are carved only when both CRC-32 checks pass: the header checksum over a
 header bytes with the header-CRC field zeroed, and the payload checksum over exactly
 the declared payload length. Invalid checksums are reported and the image is not carved.
 JFFS2 carving is limited to INODE and DIRENT nodes: it verifies the common header CRC,
-node CRC, and the inode compressed-data or directory-entry name CRC. Other JFFS2 node
-types are not currently claimed as checksum-validated or carved.
+node CRC, and the inode compressed-data or directory-entry name CRC using Linux's raw
+crc32_le seed-0 convention. Other JFFS2 node types are not currently claimed as
+checksum-validated or carved.
 SquashFS and CRAMFS are carved as opaque filesystem images; this tool does not
 yet recursively parse their internal filesystems or UBI volumes, and it does
 not claim zlib-stream extraction.

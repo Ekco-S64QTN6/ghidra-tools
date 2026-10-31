@@ -42,6 +42,16 @@ def make_uimage(declared_size, payload=b"", name=b"synthetic-test", compression=
     return bytes(header) + payload
 
 
+def jffs2_crc32(data, crc=0):
+    """Independent bitwise implementation of Linux crc32_le(seed=0)."""
+    crc &= 0xFFFFFFFF
+    for byte in data:
+        crc ^= byte
+        for _ in range(8):
+            crc = (crc >> 1) ^ (0xEDB88320 if crc & 1 else 0)
+    return crc & 0xFFFFFFFF
+
+
 def make_jffs2_inode(payload=b"jffs2-data", endian="<", csize=None):
     compressed_size = len(payload) if csize is None else csize
     total_size = 68 + len(payload)
@@ -49,12 +59,12 @@ def make_jffs2_inode(payload=b"jffs2-data", endian="<", csize=None):
         endian + "HHIIIIIHHIIIIIIIBBHII",
         0x1985, 0xE002, total_size, 0, 7, 3, 0o100644, 1000, 1000,
         len(payload), 0, 0, 0, 0, compressed_size, len(payload),
-        0, 0, 0, zlib.crc32(payload) & 0xFFFFFFFF, 0,
+        0, 0, 0, jffs2_crc32(payload), 0,
     ))
     if len(header) != 68:
         raise AssertionError("synthetic JFFS2 raw inode must be 68 bytes")
-    struct.pack_into(endian + "I", header, 8, zlib.crc32(header[:8]) & 0xFFFFFFFF)
-    struct.pack_into(endian + "I", header, 64, zlib.crc32(header[:60]) & 0xFFFFFFFF)
+    struct.pack_into(endian + "I", header, 8, jffs2_crc32(header[:8]))
+    struct.pack_into(endian + "I", header, 64, jffs2_crc32(header[:60]))
     padded_size = (total_size + 3) & ~3
     return bytes(header) + payload + (b"\xFF" * (padded_size - total_size))
 
@@ -64,12 +74,12 @@ def make_jffs2_dirent(name=b"kernel", endian=">"):
     header = bytearray(struct.pack(
         endian + "HHIIIIII BB2sII",
         0x1985, 0xE001, total_size, 0, 1, 9, 11, 1700000000,
-        len(name), 8, b"\x00\x00", 0, zlib.crc32(name) & 0xFFFFFFFF,
+        len(name), 8, b"\x00\x00", 0, jffs2_crc32(name),
     ))
     if len(header) != 40:
         raise AssertionError("synthetic JFFS2 raw dirent must be 40 bytes")
-    struct.pack_into(endian + "I", header, 8, zlib.crc32(header[:8]) & 0xFFFFFFFF)
-    struct.pack_into(endian + "I", header, 32, zlib.crc32(header[:32]) & 0xFFFFFFFF)
+    struct.pack_into(endian + "I", header, 8, jffs2_crc32(header[:8]))
+    struct.pack_into(endian + "I", header, 32, jffs2_crc32(header[:32]))
     padded_size = (total_size + 3) & ~3
     return bytes(header) + name + (b"\xFF" * (padded_size - total_size))
 
@@ -149,6 +159,18 @@ class UImageBoundsTests(unittest.TestCase):
 
 
 class Jffs2IntegrityTests(unittest.TestCase):
+    def test_crc32_uses_linux_seed_zero_without_xor(self):
+        # Linux crc32_le(0, "123456789", 9), unlike zlib's finalized form.
+        self.assertEqual(jffs2_crc32(b"123456789"), 0x2DFD2D88)
+
+    def test_crc32_supports_incremental_chunks(self):
+        data = b"JFFS2 streaming CRC fixture" * 5000
+        split = len(data) // 2
+        self.assertEqual(
+            jffs2_crc32(data[split:], jffs2_crc32(data[:split])),
+            jffs2_crc32(data),
+        )
+
     def test_valid_little_endian_inode_checks_all_crcs(self):
         payload = b"firmware fragment"
         found = firmware_carver.parse_jffs2(make_jffs2_inode(payload, "<"), 0)
@@ -166,6 +188,11 @@ class Jffs2IntegrityTests(unittest.TestCase):
         self.assertIsNotNone(found)
         self.assertEqual(found["node_kind"], "inode")
 
+    def test_rejects_other_node_families_even_with_valid_common_header(self):
+        data = bytearray(struct.pack("<HHII", 0x1985, 0xE008, 12, 0))
+        struct.pack_into("<I", data, 8, jffs2_crc32(data[:8]))
+        self.assertIsNone(firmware_carver.parse_jffs2(data, 0))
+
     def test_inode_rejects_corrupt_common_header_crc(self):
         data = bytearray(make_jffs2_inode())
         data[8] ^= 0x01
@@ -182,9 +209,10 @@ class Jffs2IntegrityTests(unittest.TestCase):
         self.assertIsNone(firmware_carver.parse_jffs2(data, 0))
 
     def test_inode_rejects_compressed_size_length_mismatch(self):
-        self.assertIsNone(firmware_carver.parse_jffs2(
-            make_jffs2_inode(b"short", csize=6), 0
-        ))
+        data = bytearray(make_jffs2_inode(b"short"))
+        struct.pack_into("<I", data, 4, 68 + 1)
+        struct.pack_into("<I", data, 8, jffs2_crc32(data[:8]))
+        self.assertIsNone(firmware_carver.parse_jffs2(data, 0))
 
     def test_inode_rejects_truncated_padded_node(self):
         data = make_jffs2_inode(b"short")
@@ -221,7 +249,7 @@ class Jffs2IntegrityTests(unittest.TestCase):
     def test_dirent_rejects_inconsistent_name_length(self):
         data = bytearray(make_jffs2_dirent(b"long-name"))
         struct.pack_into(">I", data, 4, 40 + 2)
-        struct.pack_into(">I", data, 8, zlib.crc32(data[:8]) & 0xFFFFFFFF)
+        struct.pack_into(">I", data, 8, jffs2_crc32(data[:8]))
         self.assertIsNone(firmware_carver.parse_jffs2(data, 0))
 
     def test_scanner_reports_only_valid_jffs2_inode_nodes(self):
