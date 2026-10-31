@@ -71,6 +71,19 @@ public class JsonReportWriter {
             }
             out.println("  ],");
 
+            List<ReportModel.ImportEntry> allImports = new ArrayList<>();
+            for (List<ReportModel.ImportEntry> libraryImports : d.importsByLib.values()) {
+                allImports.addAll(libraryImports);
+            }
+            out.println("  \"imports\": [");
+            for (int i = 0; i < allImports.size(); i++) {
+                ReportModel.ImportEntry imp = allImports.get(i);
+                out.print("    {\"function\": \"" + escapeJson(imp.function)
+                        + "\", \"library\": \"" + escapeJson(imp.library) + "\"}");
+                out.println(i < allImports.size() - 1 ? "," : "");
+            }
+            out.println("  ],");
+
             out.println("  \"iocs\": [");
             for (int i = 0; i < d.iocFindings.size(); i++) {
                 ReportModel.IocFinding ioc = d.iocFindings.get(i);

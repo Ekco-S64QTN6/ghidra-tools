@@ -564,6 +564,26 @@
         },
         "additionalProperties": true
       }
+    },
+    "imports": {
+      "type": "array",
+      "description": "Complete external static import table. Optional for compatibility with reports created before this field was added.",
+      "items": {
+        "type": "object",
+        "required": [
+          "function",
+          "library"
+        ],
+        "properties": {
+          "function": {
+            "type": "string"
+          },
+          "library": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
     }
   },
   "additionalProperties": true

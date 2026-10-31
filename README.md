@@ -196,7 +196,7 @@ against a malware rubric.
 ./ghidra-report.sh --search <term>           Search indexed metadata, APIs, IOCs, and indicators
 ./ghidra-report.sh --dashboard [port]        Web UI over the report history
 ./ghidra-report.sh --rules [report|binary]   Evaluate the YAML capability rules
-./ghidra-report.sh --trace <trace.json>      Correlate a sandbox trace with static imports
+./ghidra-report.sh --trace <trace.json> [report.json]  Correlate a sandbox trace with static imports
 ./ghidra-report.sh --carve <binary> [dir]    Carve embedded firmware containers
 ./ghidra-report.sh --svd <file.svd>          Inspect / inject CMSIS-SVD peripherals
 ./ghidra-report.sh --detect-type <file>      Print the detected format and exit
@@ -351,9 +351,23 @@ that reads only from that container.
 | `firmware_carver.py` | `--carve` | Memory-mapped scan and bounded extraction of SquashFS, CRAMFS, CRC-validated JFFS2 inode/directory-entry nodes, CRC-validated U-Boot uImage, GZIP streams, and embedded ELF. Nested GZIP output is rescanned recursively; extracted sub-images are left for a separate analysis invocation. |
 | `svd_injector.py` | `--svd` | Parses vendor CMSIS-SVD XML into peripheral base addresses, register offsets and IRQ vectors for bare-metal ARM Cortex-M / MIPS. |
 | `capability_engine.py` | `--rules` | Evaluates strict v1.0.0 YAML rules with file-aggregate and API-only function scopes, AND/OR/NOT and N-of-M logic; exact API matching, not capa-compatible. |
-| `trace_correlator.py` | `--trace` | Correlates a CAPE/DRAKVUF sandbox trace against the static import set using a sliding call window, so multi-step behaviours (alloc → write → create thread) match as one capability. |
+| `trace_correlator.py` | `--trace` | Correlates generic/CAPE-style process traces against the full static import table; reports observed imports, unobserved imports, APIs absent from the table (not proof of dynamic resolution), and process-scoped attack chains with event evidence. Legacy reports fall back to the suspicious-API subset and mark the comparison incomplete. |
 | `index_report.py` | *(automatic)* | Indexes each completed JSON report path into `output/reports.db`; separate runs and same-basename inputs remain distinct. Search combines SQLite `LIKE` matches on metadata/APIs/IOCs/indicators with FTS5 search across recovered text, symbols/functions, exports, rules, capabilities, and findings. |
 | `dashboard.py` | `--dashboard` | Standalone `http.server` UI + REST API. Loopback by default; `GHIDRA_DASHBOARD_HOST` opts into another bind address. |
+
+
+### Trace correlation
+
+Trace correlation uses the additive `imports` array in report-v1, which contains
+all external imports rather than only APIs tagged by the threat heuristics.
+Older report files without that field fall back to `suspicious_apis`; the JSON
+result sets `static_imports_complete: false` so a missing API or a dormant
+entry is not overinterpreted. Runtime APIs absent from the available import set
+are differences, not proof of dynamic resolution. Attack-chain matches require
+a process ID, use exact case-insensitive API identities, and include the
+matched events in `evidence_calls`. A sandbox trace is external data: verify
+its sample hash/build against the static report before using correlation output
+for automated response; the correlator does not attest that identity itself.
 
 ### Firmware carving limits
 

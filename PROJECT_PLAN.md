@@ -134,7 +134,7 @@ Pattern-match strings across the binary rather than relying on Ghidra's defined-
 ### Advanced Deobfuscation & Capability Detection (Phase 3A Expansion)
 - [x] **P-Code Emulation Engine (`EmulatorHelper`)** (`lib/EmulatorDeobfuscator.java`) — lightweight P-code emulation over loop-dense and bitwise functions to extract runtime-constructed strings and defeat XOR loops
 - [x] **Rule-Driven Capability Engine** (`scripts/capability_engine.py`, `rules/*.yaml`, `--rules`) — YAML-based capability matching rules across instruction, basic block, and function scopes (inspired by Mandiant capa)
-- [x] **Dynamic Sandbox Trace Ingestion** (`scripts/trace_correlator.py`, `--trace`) — sliding call window correlation matching runtime API traces (CAPE/DRAKVUF) with static Ghidra imports
+- [x] **Dynamic Sandbox Trace Ingestion** (`scripts/trace_correlator.py`, `--trace`) — correlate runtime calls against the full additive report-v1 static `imports` table (legacy reports use the explicitly incomplete `suspicious_apis` subset); require process IDs and exact case-insensitive API identities for attack chains, and retain matched event evidence. Trace-to-sample hash verification remains open.
 
 ---
 

@@ -51,6 +51,24 @@ def main():
     pe_report = sample_report()
     validator.validate(pe_report)
 
+    # The complete static import table is additive and optional in report-v1.
+    # Legacy reports without it continue to validate.
+    imports_report = sample_report()
+    imports_report["imports"] = [
+        {"function": "GetTickCount", "library": "KERNEL32.dll"},
+        {"function": "VirtualAlloc", "library": "KERNEL32.dll"},
+    ]
+    validator.validate(imports_report)
+
+    malformed_imports = copy.deepcopy(imports_report)
+    malformed_imports["imports"][0].pop("library")
+    try:
+        validator.validate(malformed_imports)
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("schema unexpectedly accepted an import without its library")
+
     # The additive detection section is optional so older v1 consumers/reports
     # remain valid, but when present its nullability and numeric flags are typed.
     detection_report = sample_report()

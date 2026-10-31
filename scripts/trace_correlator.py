@@ -165,10 +165,26 @@ def load_trace(trace_path):
         "processes": processes,
     }
 
+def _process_id(call):
+    """Return a stable per-run process ID; process names alone can collide."""
+    if not isinstance(call, dict):
+        return None
+    value = call.get("process_id")
+    if isinstance(value, bool) or not isinstance(value, (str, int)) or value == "":
+        return None
+    return value
+
+
 def match_sliding_chains(calls, window_size=10):
-    """Match ordered API sequences without combining calls from different processes."""
+    """Match exact ordered API identities within one identified process."""
     matches = []
-    if len(calls) < 2:
+    if not isinstance(calls, list) or len(calls) < 2:
+        return matches
+    try:
+        window_size = int(window_size)
+    except (TypeError, ValueError):
+        return matches
+    if window_size < 1:
         return matches
 
     for chain in ATTACK_CHAINS:
@@ -176,59 +192,89 @@ def match_sliding_chains(calls, window_size=10):
         sequence_length = len(sequence)
 
         for start_index, first_call in enumerate(calls):
-            process_key = first_call.get("process_id", first_call.get("process_name"))
+            process_id = _process_id(first_call)
+            # A missing PID is not evidence that two events share a process.
+            # Nested CAPE process records receive synthetic per-process IDs in load_trace.
+            if process_id is None:
+                continue
+
             sequence_index = 0
             evidence_indices = []
-
-            for call_index in range(start_index, min(len(calls), start_index + window_size)):
+            stop_index = min(len(calls), start_index + window_size)
+            for call_index in range(start_index, stop_index):
                 call = calls[call_index]
-                candidate_process = call.get("process_id", call.get("process_name"))
-                if candidate_process != process_key:
+                if _process_id(call) != process_id:
                     continue
 
                 call_name = _api_key(call.get("api", ""))
-                expected_name = _api_key(sequence[sequence_index]) if sequence_index < sequence_length else ""
-                if sequence_index < sequence_length and call_name.endswith(expected_name):
+                expected_name = _api_key(sequence[sequence_index])
+                if call_name == expected_name:
                     evidence_indices.append(call_index)
                     sequence_index += 1
+                    if sequence_index == sequence_length:
+                        break
 
             if sequence_index == sequence_length:
                 matches.append({
                     "name": chain["name"],
                     "technique": chain["technique"],
                     "weight": chain["weight"],
-                    "sequence": sequence,
+                    "sequence": list(sequence),
+                    "process_id": process_id,
                     "start_call_index": evidence_indices[0],
                     "end_call_index": evidence_indices[-1],
+                    "evidence_call_indices": list(evidence_indices),
+                    "evidence_calls": [
+                        dict(calls[index]) for index in evidence_indices
+                    ],
                 })
                 break  # Report each chain at most once.
 
     return matches
 
+
 def correlate_static_and_dynamic(static_data, dynamic_data):
-    """Correlate static API names and runtime calls using case-insensitive identities."""
-    static_names = []
-    for item in static_data.get("suspicious_apis", []):
+    """Compare runtime calls with every static import, retaining legacy report support."""
+    if not isinstance(static_data, dict):
+        static_data = {}
+    if not isinstance(dynamic_data, dict):
+        dynamic_data = {}
+
+    raw_imports = static_data.get("imports")
+    static_imports_complete = isinstance(raw_imports, list)
+    if static_imports_complete:
+        import_source = "imports"
+    else:
+        # Older report-v1 files only have the heuristic-tagged suspicious subset.
+        raw_imports = static_data.get("suspicious_apis", [])
+        import_source = "suspicious_apis_legacy"
+    if not isinstance(raw_imports, list):
+        raw_imports = []
+
+    static_by_key = {}
+    for item in raw_imports:
         if not isinstance(item, dict):
             continue
         fn = item.get("function", "")
-        if fn:
-            static_names.append(str(fn).strip())
-
-    static_by_key = {}
-    for name in static_names:
+        if fn is None:
+            continue
+        name = str(fn).strip()
         key = _api_key(name)
         if key:
             static_by_key.setdefault(key, name)
 
-    dynamic_by_key = {}
     dynamic_calls = dynamic_data.get("calls", [])
     if not isinstance(dynamic_calls, list):
         dynamic_calls = []
+
+    dynamic_by_key = {}
     for call in dynamic_calls:
         if not isinstance(call, dict):
             continue
-        api = str(call.get("api", "")).strip()
+        raw_api = call.get("api")
+        if raw_api is None:
+            continue
+        api = str(raw_api).strip()
         key = _api_key(api)
         if key:
             dynamic_by_key.setdefault(key, api)
@@ -236,9 +282,8 @@ def correlate_static_and_dynamic(static_data, dynamic_data):
     static_keys = set(static_by_key)
     dynamic_keys = set(dynamic_by_key)
 
-    # Preserve familiar names in the report while matching identity case-insensitively.
     confirmed = sorted(static_by_key[key] for key in static_keys & dynamic_keys)
-    hidden = sorted(
+    not_in_static_imports = sorted(
         api for key, api in dynamic_by_key.items()
         if key not in static_keys and not api.startswith("__")
     )
@@ -248,11 +293,16 @@ def correlate_static_and_dynamic(static_data, dynamic_data):
     return {
         "total_dynamic_calls": len(dynamic_calls),
         "unique_dynamic_apis": len(dynamic_keys),
+        "unique_static_imports": len(static_keys),
+        "static_import_source": import_source,
+        "static_imports_complete": static_imports_complete,
         "confirmed_apis": confirmed,
-        "hidden_dynamic_apis": hidden,
+        "not_in_static_imports": not_in_static_imports,
+        "hidden_dynamic_apis": not_in_static_imports,
         "dormant_apis": dormant,
         "matched_chains": chains,
     }
+
 
 def print_correlation_report(static_file, trace_file, results):
     print("=" * 80)
@@ -261,46 +311,55 @@ def print_correlation_report(static_file, trace_file, results):
     print(f"  Static Binary Report: {static_file}")
     print(f"  Dynamic Sandbox Trace: {trace_file}")
     print(f"  Total Dynamic Calls: {results['total_dynamic_calls']} ({results['unique_dynamic_apis']} unique APIs)")
-    print()
-
-    # Attack chains
-    print("  ── Sliding Call Window Attack Sequences ──")
-    if results["matched_chains"]:
-        for ch in results["matched_chains"]:
-            seq_str = " -> ".join(ch["sequence"])
-            print(f"  ● [{ch['technique']}] {ch['name']} (Weight: +{ch['weight']})")
-            print(f"    ↳ Sequence: {seq_str}")
+    print(f"  Unique Static Imports: {results['unique_static_imports']}")
+    if results["static_imports_complete"]:
+        print("  Static Import Source: complete imports table")
     else:
-        print("  No multi-step attack chains identified in sliding window.")
+        print("  Static Import Source: legacy suspicious_apis subset (incomplete)")
     print()
 
-    # Confirmed APIs
-    print("  ── Confirmed Runtime APIs (Static Import + Executed) ──")
+    print("  ── Process-Scoped Attack Sequences ──")
+    if results["matched_chains"]:
+        for chain in results["matched_chains"]:
+            sequence = " -> ".join(chain["sequence"])
+            print(f"  ● [{chain['technique']}] {chain['name']} (Weight: +{chain['weight']})")
+            print(f"    ↳ Process ID: {chain['process_id']}; calls #{chain['start_call_index']}–#{chain['end_call_index']}: {sequence}")
+            for event in chain["evidence_calls"]:
+                print(f"       {event.get('api', '<unknown>')} (time={event.get('time', '')}, thread={event.get('thread_id', '')})")
+    else:
+        print("  No process-scoped multi-step attack chains identified in the sliding window.")
+    print()
+
+    print("  ── Confirmed Runtime APIs (Static Import + Observed) ──")
     if results["confirmed_apis"]:
         for api in results["confirmed_apis"]:
             print(f"  ✔ {api}")
     else:
-        print("  No matching static imports observed during dynamic run.")
+        print("  No matching static imports observed during this trace.")
     print()
 
-    # Hidden APIs
-    print("  ── Dynamically Resolved / Hidden APIs (Evasion Indicator) ──")
-    if results["hidden_dynamic_apis"]:
-        for api in results["hidden_dynamic_apis"][:10]:
-            print(f"  ⚠ {api} (Not in static import table)")
-        if len(results["hidden_dynamic_apis"]) > 10:
-            print(f"  ... and {len(results['hidden_dynamic_apis']) - 10} additional unhooked/resolved API(s)")
+    print("  ── Runtime APIs Not Found in the Available Static Import Set ──")
+    if results["not_in_static_imports"]:
+        for api in results["not_in_static_imports"][:10]:
+            print(f"  ⚠ {api} (not present in the static import set)")
+        if len(results["not_in_static_imports"]) > 10:
+            print(f"  ... and {len(results['not_in_static_imports']) - 10} additional API(s)")
+        print("  These may be dynamically resolved, supplied by another API source, or from a mismatched trace.")
+        print("  Absence from the import table alone is not proof of dynamic resolution.")
     else:
-        print("  No hidden dynamic API invocations detected.")
+        print("  No runtime API names were absent from the available static import set.")
     print()
 
-    # Dormant APIs
-    print("  ── Dormant Static APIs (Imported but Unexecuted) ──")
+    if results["static_imports_complete"]:
+        print("  ── Static Imports Not Observed in the Trace ──")
+    else:
+        print("  ── Legacy Suspicious APIs Not Observed in the Trace (Incomplete Set) ──")
+        print("  This report predates the complete imports field; other imports are unknown.")
     if results["dormant_apis"]:
         for api in results["dormant_apis"]:
-            print(f"  💤 {api} (Possible dormant trigger or sandbox evasion)")
+            print(f"  💤 {api} (imported but not observed)")
     else:
-        print("  All static imports were executed.")
+        print("  No entries in the available static import set were unobserved.")
     print("=" * 80)
 
 def main():
@@ -317,8 +376,10 @@ def main():
         chains = match_sliding_chains(trace_data["calls"])
         print(f"Total dynamic calls: {len(trace_data['calls'])}")
         print(f"Matched attack chains: {len(chains)}")
-        for ch in chains:
-            print(f"  - [{ch['technique']}] {ch['name']}: {' -> '.join(ch['sequence'])}")
+        for chain in chains:
+            print(f"  - [{chain['technique']}] {chain['name']} (PID {chain['process_id']}): {' -> '.join(chain['sequence'])}")
+            for index, event in zip(chain["evidence_call_indices"], chain["evidence_calls"]):
+                print(f"      #{index}: {event.get('api', '<unknown>')} (time={event.get('time', '')}, thread={event.get('thread_id', '')})")
         sys.exit(0)
 
     if not trace_file:

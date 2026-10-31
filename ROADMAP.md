@@ -192,16 +192,19 @@ This is a bounded incremental implementation, not full recursive firmware extrac
 
 **Relevant files:** `scripts/trace_correlator.py`, `--trace`, `docs/SOAR_INTEGRATION.md`.
 
-- Normalize generic and CAPE/Cuckoo/DRAKVUF-like formats with explicit adapters and schema tests. The current list input path later assumes a dictionary and calls `.get()`; nested process behavior is not consistently read from its actual location.
-- Correlate dynamic calls against all relevant static imports or statically resolved calls, not only the subset already tagged suspicious. Separate “not in import table” from “evidence of dynamic resolution.”
-- Normalize API names/case and preserve process, thread, time, arguments, and call ordering. Keep attack-chain sequence matches tied to the actual event slice.
-- State clearly that a trace is an external observation and may not correspond to the same sample/build unless the hash and run metadata match.
+- Extend the generic-array and nested CAPE-style adapters with validated fixtures for additional sandbox variants (including precise DRAKVUF event shapes); preserve process, thread, time, status, and argument metadata.
+- Export every external static import in the additive report-v1 `imports` field; retain `suspicious_apis` for heuristic findings and fall back to that subset for legacy reports. Keep the fallback's incompleteness explicit.
+- Compare runtime API names against the full import set using exact case-insensitive identity. An API absent from the available import table is not, by itself, evidence of dynamic resolution.
+- Require a stable process ID for attack-chain matching, use exact API identities (not suffix matching), and return the actual matched event slice with each chain.
+- State clearly that a trace is an external observation and may not correspond to the same sample/build; cryptographic hash/run-metadata matching remains open.
 
 **Acceptance criteria**
 - Fixtures include each supported input schema, list-shaped input, multiple processes, case variations, absent fields, and common injection chains.
-- Output differentiates confirmed, statically imported but unobserved, and unresolved dynamic APIs without treating any one category as a verdict by itself.
+- Output differentiates confirmed imports, imported-but-unobserved entries, and runtime APIs absent from the available import set; absence is not proof of dynamic resolution and no category is a verdict by itself.
 
 **Incremental progress — 2026-10-29:** The trace loader now accepts top-level array traces without calling mapping methods on the list, normalizes generic and CAPE/Cuckoo process call records, retains process/thread/time/argument metadata on normalized calls, matches API names case-insensitively, and prevents an attack chain from being stitched together across different process IDs. Dedicated synthetic fixtures run in fast CI. Additional schema adapters, explicit provenance/hash matching between sample and trace, and broader sandbox-specific fixtures remain open.
+
+**Incremental progress — 2026-10-30:** JSON report-v1 now includes an optional `imports` array with every external static import while retaining `suspicious_apis` unchanged. The schema accepts old v1 reports without the new field, and the real-Ghidra PE fixture now includes an untagged `GetTickCount` import to prove it appears in `imports` but not `suspicious_apis`. Trace correlation prefers the complete table, flags the legacy subset as incomplete, labels APIs absent from the available set without calling them dynamically resolved, and attaches exact process-scoped event evidence to chain matches. Attack chains now require a process ID and exact case-insensitive API identity. Trace-to-sample hash verification and more sandbox-specific adapters remain open.
 
 ### 1.6 Calibrate risk scoring and preserve evidence
 
