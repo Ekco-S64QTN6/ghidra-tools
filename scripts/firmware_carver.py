@@ -3,8 +3,8 @@
 firmware_carver.py — Deep boundary detection and container carving pipeline for embedded firmware.
 
 Detects, carves, and metadata-analyzes embedded firmware containers:
-- SquashFS (v3/v4, LE/BE, compression types: gzip, lzma, lzo, xz, lz4, zstd)
-- CRAMFS (LE/BE, volume names, exact byte sizes)
+- SquashFS v3/v4 (little-/big-endian, structurally validated superblocks; opaque contents)
+- CRAMFS v2 (little-/big-endian, bounded superblock and root-inode validation; opaque contents)
 - U-Boot uImage (OS, Arch, Type, Compression, Load Address, Entry Point, Name)
 - JFFS2 nodes
 - GZIP compressed kernel/stage streams
@@ -183,57 +183,126 @@ def parse_uimage(data, offset, deadline=None):
     }
 
 def parse_squashfs(data, offset):
-    if len(data) - offset < 96:
+    """Validate a SquashFS v3/v4 superblock without parsing filesystem contents."""
+    if offset < 0 or len(data) - offset < 96:
         return None
 
-    magic_bytes = data[offset:offset+4]
-    is_le = magic_bytes in (b"sqsh", b"qshs")
-    endian = "<" if is_le else ">"
+    magic_bytes = data[offset:offset + 4]
+    if magic_bytes == b"hsqs":
+        endian = "<"
+        endian_name = "little"
+    elif magic_bytes == b"sqsh":
+        endian = ">"
+        endian_name = "big"
+    else:
+        return None
 
     try:
-        inodes, mkfs_time, block_size, fragments, comp, block_log, flags, no_ids, s_major, s_minor = struct.unpack(
-            endian + "IIIIHHHHHH", data[offset+4:offset+32]
+        (
+            inodes, mkfs_time, block_size, fragments, comp, block_log,
+            flags, no_ids, s_major, s_minor,
+        ) = struct.unpack_from(endian + "IIIIHHHHHH", data, offset + 4)
+        root_inode = struct.unpack_from(endian + "Q", data, offset + 32)[0]
+        bytes_used = struct.unpack_from(endian + "Q", data, offset + 40)[0]
+
+        supported_version = (
+            (s_major == 3 and s_minor <= 1)
+            or (s_major == 4 and s_minor == 0)
         )
-        bytes_used = struct.unpack(endian + "Q", data[offset+40:offset+48])[0]
+        if not supported_version or inodes == 0:
+            return None
+        if block_size < 4096 or block_size > (1 << 20):
+            return None
+        if block_log < 12 or block_log > 20 or block_size != (1 << block_log):
+            return None
+        if (root_inode & 0xFFFF) > 8192:
+            return None
+        if bytes_used < 96 or bytes_used > len(data) - offset:
+            return None
 
         comp_map = {1: "gzip", 2: "lzma", 3: "lzo", 4: "xz", 5: "lz4", 6: "zstd"}
-        if bytes_used > 0 and bytes_used <= len(data) - offset:
-            return {
-                "type": "squashfs",
-                "description": "SquashFS v%d.%d Filesystem" % (s_major, s_minor),
-                "offset": offset,
-                "total_size": bytes_used,
-                "endian": "little" if is_le else "big",
-                "compression": comp_map.get(comp, "id_" + str(comp)),
-                "block_size": block_size,
-                "inodes": inodes,
-                "created": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(mkfs_time)) if mkfs_time > 0 else "unknown"
-            }
-    except Exception:
-        pass
-    return None
+        return {
+            "type": "squashfs",
+            "description": "SquashFS v%d.%d Filesystem" % (s_major, s_minor),
+            "offset": offset,
+            "total_size": bytes_used,
+            "endian": endian_name,
+            "compression": comp_map.get(comp, "id_" + str(comp)),
+            "block_size": block_size,
+            "inodes": inodes,
+            "root_inode_offset": root_inode & 0xFFFF,
+            "created": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(mkfs_time)) if mkfs_time > 0 else "unknown",
+        }
+    except (struct.error, OverflowError, ValueError):
+        return None
+
 
 def parse_cramfs(data, offset):
-    if len(data) - offset < 64:
+    """Validate a bounded CRAMFS v2 superblock; leave its contents opaque."""
+    superblock_size = 76
+    if offset < 0 or len(data) - offset < superblock_size:
         return None
-    magic_bytes = data[offset:offset+4]
-    is_le = magic_bytes == b"\x45\x3d\xcd\x28"
-    endian = "<" if is_le else ">"
+
+    magic_bytes = data[offset:offset + 4]
+    if magic_bytes == b"\x45\x3d\xcd\x28":
+        endian = "<"
+        endian_name = "little"
+    elif magic_bytes == b"\x28\xcd\x3d\x45":
+        endian = ">"
+        endian_name = "big"
+    else:
+        return None
+
     try:
-        size, flags, future, signature = struct.unpack(endian + "II16s16s", data[offset+4:offset+44])
-        name = data[offset+48:offset+64].split(b"\x00")[0].decode("latin-1", errors="replace")
-        if size > 0 and size <= len(data) - offset:
-            return {
-                "type": "cramfs",
-                "description": "CRAMFS Filesystem",
-                "offset": offset,
-                "total_size": size,
-                "name": name,
-                "endian": "little" if is_le else "big"
-            }
-    except Exception:
-        pass
-    return None
+        size, flags, future = struct.unpack_from(endian + "III", data, offset + 4)
+        signature = data[offset + 16:offset + 32]
+        crc, edition, blocks, files = struct.unpack_from(endian + "IIII", data, offset + 32)
+        name = data[offset + 48:offset + 64].split(b"\x00", 1)[0].decode("latin-1", errors="replace")
+        root_mode = struct.unpack_from(endian + "H", data, offset + 64)[0]
+        root_word = struct.unpack_from(endian + "I", data, offset + 72)[0]
+
+        fsid_version_2 = 0x00000001
+        shifted_root_offset = 0x00000400
+        wrong_signature = 0x00000200
+        supported_flags = 0x00000FFF
+        if not (flags & fsid_version_2):
+            return None
+        if flags & ~supported_flags:
+            return None
+        if signature != b"Compressed ROMFS" and not (flags & wrong_signature):
+            return None
+        if size < superblock_size or size > len(data) - offset:
+            return None
+        if (root_mode & 0o170000) != 0o040000:
+            return None
+
+        if endian == "<":
+            root_offset = ((root_word >> 6) & 0x03FFFFFF) << 2
+        else:
+            root_offset = (root_word & 0x03FFFFFF) << 2
+        if root_offset:
+            if root_offset >= size:
+                return None
+            if not (flags & shifted_root_offset) and root_offset not in (
+                superblock_size, 512 + superblock_size
+            ):
+                return None
+
+        return {
+            "type": "cramfs",
+            "description": "CRAMFS Filesystem",
+            "offset": offset,
+            "total_size": size,
+            "name": name,
+            "endian": endian_name,
+            "flags": "0x%08X" % flags,
+            "files": files,
+            "blocks": blocks,
+            "crc32": "0x%08X" % crc,
+            "root_offset": root_offset,
+        }
+    except (struct.error, OverflowError, ValueError):
+        return None
 
 def parse_elf(data, offset):
     if len(data) - offset < 52:
@@ -522,7 +591,7 @@ def scan_file(filepath, limits=None, deadline=None):
                         )
 
             # 2. SquashFS
-            if chunk in (b"sqsh", b"hsqs", b"shsq", b"qshs"):
+            if chunk in (b"hsqs", b"sqsh"):
                 res = parse_squashfs(data, i)
                 if res:
                     findings.append(res)
