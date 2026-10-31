@@ -42,6 +42,38 @@ def make_uimage(declared_size, payload=b"", name=b"synthetic-test", compression=
     return bytes(header) + payload
 
 
+def make_jffs2_inode(payload=b"jffs2-data", endian="<", csize=None):
+    compressed_size = len(payload) if csize is None else csize
+    total_size = 68 + len(payload)
+    header = bytearray(struct.pack(
+        endian + "HHIIIIIHHIIIIIIIBBHII",
+        0x1985, 0xE002, total_size, 0, 7, 3, 0o100644, 1000, 1000,
+        len(payload), 0, 0, 0, 0, compressed_size, len(payload),
+        0, 0, 0, zlib.crc32(payload) & 0xFFFFFFFF, 0,
+    ))
+    if len(header) != 68:
+        raise AssertionError("synthetic JFFS2 raw inode must be 68 bytes")
+    struct.pack_into(endian + "I", header, 8, zlib.crc32(header[:8]) & 0xFFFFFFFF)
+    struct.pack_into(endian + "I", header, 64, zlib.crc32(header[:60]) & 0xFFFFFFFF)
+    padded_size = (total_size + 3) & ~3
+    return bytes(header) + payload + (b"\xFF" * (padded_size - total_size))
+
+
+def make_jffs2_dirent(name=b"kernel", endian=">"):
+    total_size = 40 + len(name)
+    header = bytearray(struct.pack(
+        endian + "HHIIIIII BB2sII",
+        0x1985, 0xE001, total_size, 0, 1, 9, 11, 1700000000,
+        len(name), 8, b"\x00\x00", 0, zlib.crc32(name) & 0xFFFFFFFF,
+    ))
+    if len(header) != 40:
+        raise AssertionError("synthetic JFFS2 raw dirent must be 40 bytes")
+    struct.pack_into(endian + "I", header, 8, zlib.crc32(header[:8]) & 0xFFFFFFFF)
+    struct.pack_into(endian + "I", header, 32, zlib.crc32(header[:32]) & 0xFFFFFFFF)
+    padded_size = (total_size + 3) & ~3
+    return bytes(header) + name + (b"\xFF" * (padded_size - total_size))
+
+
 class UImageBoundsTests(unittest.TestCase):
     def test_valid_payload_size_is_preserved(self):
         payload = b"firmware-payload"
@@ -114,6 +146,98 @@ class UImageBoundsTests(unittest.TestCase):
 
             self.assertEqual(extracted, [])
             self.assertEqual(os.listdir(output), [])
+
+
+class Jffs2IntegrityTests(unittest.TestCase):
+    def test_valid_little_endian_inode_checks_all_crcs(self):
+        payload = b"firmware fragment"
+        found = firmware_carver.parse_jffs2(make_jffs2_inode(payload, "<"), 0)
+        self.assertIsNotNone(found)
+        self.assertEqual(found["node_kind"], "inode")
+        self.assertEqual(found["inode"], 7)
+        self.assertEqual(found["compressed_size"], len(payload))
+        self.assertEqual(found["decompressed_size"], len(payload))
+        self.assertTrue(found["header_crc32"].startswith("0x"))
+        self.assertTrue(found["node_crc32"].startswith("0x"))
+        self.assertTrue(found["data_crc32"].startswith("0x"))
+
+    def test_valid_big_endian_inode_is_supported(self):
+        found = firmware_carver.parse_jffs2(make_jffs2_inode(b"be payload", ">"), 0)
+        self.assertIsNotNone(found)
+        self.assertEqual(found["node_kind"], "inode")
+
+    def test_inode_rejects_corrupt_common_header_crc(self):
+        data = bytearray(make_jffs2_inode())
+        data[8] ^= 0x01
+        self.assertIsNone(firmware_carver.parse_jffs2(data, 0))
+
+    def test_inode_rejects_corrupt_node_crc(self):
+        data = bytearray(make_jffs2_inode())
+        data[64] ^= 0x01
+        self.assertIsNone(firmware_carver.parse_jffs2(data, 0))
+
+    def test_inode_rejects_corrupt_compressed_data_crc(self):
+        data = bytearray(make_jffs2_inode())
+        data[68] ^= 0x01
+        self.assertIsNone(firmware_carver.parse_jffs2(data, 0))
+
+    def test_inode_rejects_compressed_size_length_mismatch(self):
+        self.assertIsNone(firmware_carver.parse_jffs2(
+            make_jffs2_inode(b"short", csize=6), 0
+        ))
+
+    def test_inode_rejects_truncated_padded_node(self):
+        data = make_jffs2_inode(b"short")
+        self.assertIsNone(firmware_carver.parse_jffs2(data[:-1], 0))
+
+    def test_valid_big_endian_dirent_checks_name_and_node_crcs(self):
+        found = firmware_carver.parse_jffs2(make_jffs2_dirent(b"kernel.img", ">"), 0)
+        self.assertIsNotNone(found)
+        self.assertEqual(found["node_kind"], "dirent")
+        self.assertEqual(found["name"], "kernel.img")
+        self.assertEqual(found["parent_inode"], 1)
+        self.assertEqual(found["inode"], 11)
+
+    def test_valid_little_endian_dirent_is_supported(self):
+        found = firmware_carver.parse_jffs2(make_jffs2_dirent(b"root", "<"), 0)
+        self.assertIsNotNone(found)
+        self.assertEqual(found["name"], "root")
+
+    def test_dirent_rejects_corrupt_node_crc(self):
+        data = bytearray(make_jffs2_dirent())
+        data[32] ^= 0x01
+        self.assertIsNone(firmware_carver.parse_jffs2(data, 0))
+
+    def test_dirent_rejects_corrupt_name_crc(self):
+        data = bytearray(make_jffs2_dirent())
+        data[36] ^= 0x01
+        self.assertIsNone(firmware_carver.parse_jffs2(data, 0))
+
+    def test_dirent_rejects_corrupt_name_bytes(self):
+        data = bytearray(make_jffs2_dirent())
+        data[40] ^= 0x01
+        self.assertIsNone(firmware_carver.parse_jffs2(data, 0))
+
+    def test_dirent_rejects_inconsistent_name_length(self):
+        data = bytearray(make_jffs2_dirent(b"long-name"))
+        struct.pack_into(">I", data, 4, 40 + 2)
+        struct.pack_into(">I", data, 8, zlib.crc32(data[:8]) & 0xFFFFFFFF)
+        self.assertIsNone(firmware_carver.parse_jffs2(data, 0))
+
+    def test_scanner_reports_only_valid_jffs2_inode_nodes(self):
+        valid = make_jffs2_inode(b"contents")
+        invalid = bytearray(make_jffs2_inode(b"tampered"))
+        invalid[-1] ^= 0x01
+        with tempfile.NamedTemporaryFile(prefix="jffs2-crc-", suffix=".bin") as handle:
+            handle.write(valid + bytes(invalid))
+            handle.flush()
+            findings = firmware_carver.scan_file(handle.name)
+
+        jffs = [item for item in findings if item.get("type") == "jffs2"]
+        self.assertEqual(len(jffs), 1)
+        self.assertEqual(jffs[0]["node_kind"], "inode")
+        self.assertEqual(jffs[0]["offset"], 0)
+
 
 
 class RecursiveBudgetTests(unittest.TestCase):

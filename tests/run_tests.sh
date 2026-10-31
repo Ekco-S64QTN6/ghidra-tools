@@ -239,13 +239,15 @@ fi
 log_test "Testing Firmware Container Carver Pipeline..."
 TEST_TMP="$SCRIPT_DIR/scratch_test_fw.bin"
 python3 -c "
-import struct, gzip
-blob = bytearray(b' ' * 256)
+import struct, gzip, zlib
+blob = bytearray(b'\\x00' * 256)
 gz = gzip.compress(b'TEST_KERNEL_IMAGE_STREAM' * 10)
 blob.extend(gz)
-u_hdr = struct.pack('>IIIIIIIBBBB32s', 0x27051956, 0, 1700000000, 20, 0, 0, 0, 5, 1, 2, 0, b'UImage-Test ')
+payload = b'A' * 20
+u_hdr = bytearray(struct.pack('>IIIIIIIBBBB32s', 0x27051956, 0, 1700000000, len(payload), 0, 0, zlib.crc32(payload) & 0xFFFFFFFF, 5, 1, 2, 0, b'UImage-Test\\x00'))
+struct.pack_into('>I', u_hdr, 4, zlib.crc32(u_hdr) & 0xFFFFFFFF)
 blob.extend(u_hdr)
-blob.extend(b'A' * 20)
+blob.extend(payload)
 open('$TEST_TMP', 'wb').write(blob)
 "
 CARVE_JSON="$(python3 "$SCRIPT_DIR/scripts/firmware_carver.py" json "$TEST_TMP")"

@@ -345,6 +345,134 @@ def _open_mapped(path):
         raise
 
 
+def _jffs2_pad4(length):
+    return (length + 3) & ~3
+
+
+def parse_jffs2(data, offset, deadline=None):
+    """Validate a JFFS2 raw inode or directory-entry node before carving.
+
+    Only INODE (0xE002) and DIRENT (0xE001) are supported. Other JFFS2
+    families are ignored rather than accepted on a common header alone.
+    """
+    available = len(data) - offset
+    if offset < 0 or available < 12:
+        return None
+
+    magic_bytes = data[offset:offset + 2]
+    if magic_bytes == b"\x85\x19":
+        endian = "<"
+    elif magic_bytes == b"\x19\x85":
+        endian = ">"
+    else:
+        return None
+
+    try:
+        magic, nodetype, totlen, header_crc = struct.unpack_from(
+            endian + "HHII", data, offset
+        )
+    except struct.error:
+        return None
+
+    if magic != 0x1985 or nodetype not in (0xE001, 0xE002):
+        return None
+    if totlen < 12 or totlen > min(65536, available):
+        return None
+
+    padded_length = _jffs2_pad4(totlen)
+    if padded_length > available:
+        return None
+
+    calculated_header_crc = zlib.crc32(data[offset:offset + 8]) & 0xFFFFFFFF
+    if header_crc != calculated_header_crc:
+        return None
+
+    if nodetype == 0xE001:  # JFFS2_NODETYPE_DIRENT
+        fixed_size = 40
+        if totlen < fixed_size:
+            return None
+        name_size = data[offset + 28]
+        if name_size > 254 or _jffs2_pad4(fixed_size + name_size) != padded_length:
+            return None
+
+        node_crc = struct.unpack_from(endian + "I", data, offset + 32)[0]
+        name_crc = struct.unpack_from(endian + "I", data, offset + 36)[0]
+        calculated_node_crc = zlib.crc32(data[offset:offset + 32]) & 0xFFFFFFFF
+        if node_crc != calculated_node_crc:
+            return None
+
+        raw_name = data[offset + fixed_size:offset + fixed_size + name_size]
+        name = raw_name.split(b"\x00", 1)[0]
+        calculated_name_crc = zlib.crc32(name) & 0xFFFFFFFF
+        if name_crc != calculated_name_crc:
+            return None
+
+        pino, version, ino = struct.unpack_from(endian + "III", data, offset + 12)
+        return {
+            "type": "jffs2",
+            "description": "JFFS2 directory-entry node",
+            "node_kind": "dirent",
+            "offset": offset,
+            "total_size": padded_length,
+            "node_size": totlen,
+            "inode": ino,
+            "parent_inode": pino,
+            "version": version,
+            "name": name.decode("latin-1", errors="replace"),
+            "header_crc32": "0x%08X" % header_crc,
+            "node_crc32": "0x%08X" % node_crc,
+            "name_crc32": "0x%08X" % name_crc,
+        }
+
+    fixed_size = 68  # JFFS2 raw inode
+    if totlen < fixed_size:
+        return None
+    compressed_size, decompressed_size = struct.unpack_from(
+        endian + "II", data, offset + 48
+    )
+    if _jffs2_pad4(fixed_size + compressed_size) != padded_length:
+        return None
+
+    data_crc = struct.unpack_from(endian + "I", data, offset + 60)[0]
+    node_crc = struct.unpack_from(endian + "I", data, offset + 64)[0]
+    calculated_node_crc = zlib.crc32(data[offset:offset + 60]) & 0xFFFFFFFF
+    if node_crc != calculated_node_crc:
+        return None
+
+    calculated_data_crc = 0
+    payload_cursor = offset + fixed_size
+    payload_end = payload_cursor + compressed_size
+    while payload_cursor < payload_end:
+        _check_deadline(deadline)
+        chunk_end = min(payload_cursor + CHUNK_BYTES, payload_end)
+        calculated_data_crc = zlib.crc32(
+            data[payload_cursor:chunk_end], calculated_data_crc
+        )
+        payload_cursor = chunk_end
+    calculated_data_crc &= 0xFFFFFFFF
+    if data_crc != calculated_data_crc:
+        return None
+
+    inode, version, mode = struct.unpack_from(endian + "III", data, offset + 12)
+    return {
+        "type": "jffs2",
+        "description": "JFFS2 inode node",
+        "node_kind": "inode",
+        "offset": offset,
+        "total_size": padded_length,
+        "node_size": totlen,
+        "inode": inode,
+        "version": version,
+        "mode": "0%o" % mode,
+        "compressed_size": compressed_size,
+        "decompressed_size": decompressed_size,
+        "compression": data[offset + 56],
+        "header_crc32": "0x%08X" % header_crc,
+        "node_crc32": "0x%08X" % node_crc,
+        "data_crc32": "0x%08X" % data_crc,
+    }
+
+
 def scan_file(filepath, limits=None, deadline=None):
     limits = limits or CarveLimits.from_env()
     deadline = deadline if deadline is not None else time.monotonic() + limits.timeout_seconds
@@ -429,27 +557,15 @@ def scan_file(filepath, limits=None, deadline=None):
                     i += max(10, res["total_size"])
                     continue
 
-            # 6. JFFS2 node with structural header validation
-            if data[i:i + 2] in (b"\x85\x19", b"\x19\x85") and i <= n - 12:
-                is_le = data[i:i + 2] == b"\x85\x19"
-                endian = "<" if is_le else ">"
-                try:
-                    magic, nodetype, totlen, hdr_crc = struct.unpack(endian + "HHII", data[i:i + 12])
-                    if (nodetype & 0xFF00) == 0xE000 and 12 <= totlen <= min(65536, n - i):
-                        calc_crc = (zlib.crc32(data[i:i + 8]) ^ 0xFFFFFFFF) & 0xFFFFFFFF
-                        if hdr_crc == calc_crc or hdr_crc == zlib.crc32(data[i:i + 8]):
-                            findings.append({
-                                "type": "jffs2",
-                                "description": "JFFS2 Node (Type 0x%04X)" % nodetype,
-                                "offset": i,
-                                "total_size": totlen,
-                            })
-                            if len(findings) >= limits.max_files:
-                                break
-                            i += max(12, totlen)
-                            continue
-                except (struct.error, ValueError):
-                    pass
+                                    # 6. JFFS2 INODE/DIRENT nodes with type-specific CRC validation
+            if data[i:i + 2] in (b"\x85\x19", b"\x19\x85"):
+                res = parse_jffs2(data, i, deadline)
+                if res:
+                    findings.append(res)
+                    if len(findings) >= limits.max_files:
+                        break
+                    i += max(12, res["total_size"])
+                    continue
 
             i += 1
 
