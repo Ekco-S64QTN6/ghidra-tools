@@ -253,7 +253,7 @@ def parse_gzip(data, offset, limits=None, deadline=None):
     """Validate one GZIP stream with bounded input, output, and elapsed time."""
     if offset < 0 or len(data) - offset < 18:
         return None
-    if data[offset:offset + 3] != b"\\x1f\\x8b\\x08":
+    if data[offset:offset + 3] != b"\x1f\x8b\x08":
         return None
 
     limits = limits or CarveLimits()
@@ -338,7 +338,7 @@ def scan_file(filepath, limits=None, deadline=None):
             chunk = data[i:i + 4]
 
             # 1. U-Boot uImage
-            if chunk == b"\\x27\\x05\\x19\\x56":
+            if chunk == b"\x27\x05\x19\x56":
                 res = parse_uimage(data, i)
                 if res:
                     findings.append(res)
@@ -368,7 +368,7 @@ def scan_file(filepath, limits=None, deadline=None):
                     continue
 
             # 3. CRAMFS
-            if chunk in (b"\\x45\\x3d\\xcd\\x28", b"\\x28\\xcd\\x3d\\x45"):
+            if chunk in (b"\x45\x3d\xcd\x28", b"\x28\xcd\x3d\x45"):
                 res = parse_cramfs(data, i)
                 if res:
                     findings.append(res)
@@ -378,7 +378,7 @@ def scan_file(filepath, limits=None, deadline=None):
                     continue
 
             # 4. Embedded ELF
-            if chunk == b"\\x7fELF" and i > 0:
+            if chunk == b"\x7fELF" and i > 0:
                 res = parse_elf(data, i)
                 if res:
                     findings.append(res)
@@ -388,7 +388,7 @@ def scan_file(filepath, limits=None, deadline=None):
                     continue
 
             # 5. GZIP
-            if data[i:i + 3] == b"\\x1f\\x8b\\x08":
+            if data[i:i + 3] == b"\x1f\x8b\x08":
                 res = parse_gzip(data, i, limits, deadline)
                 if res:
                     findings.append(res)
@@ -398,8 +398,8 @@ def scan_file(filepath, limits=None, deadline=None):
                     continue
 
             # 6. JFFS2 node with structural header validation
-            if data[i:i + 2] in (b"\\x85\\x19", b"\\x19\\x85") and i <= n - 12:
-                is_le = data[i:i + 2] == b"\\x85\\x19"
+            if data[i:i + 2] in (b"\x85\x19", b"\x19\x85") and i <= n - 12:
+                is_le = data[i:i + 2] == b"\x85\x19"
                 endian = "<" if is_le else ">"
                 try:
                     magic, nodetype, totlen, hdr_crc = struct.unpack(endian + "HHII", data[i:i + 12])
