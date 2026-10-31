@@ -19,6 +19,8 @@ All notable changes to this project are documented here.
 - Preserve detector evidence, recommended and explicitly requested processor IDs, requested loaders, import strategy, and ELF flags in an additive optional JSON `detection` object; assert the provenance against real PE/ELF reports.
 
 ### Fixed
+- Validate JFFS2 INODE/DIRENT header and node CRCs plus compressed-data/name CRCs before carving; reject malformed node lengths and corrupted records.
+- Reject legacy U-Boot uImages with invalid header or payload CRC-32 values; compute payload checksums in bounded chunks before carving.
 - Reject corrupt/truncated GZIP members and remove partial decompression outputs; correct firmware-carving claims to exclude unimplemented UBI and zlib-stream extraction.
 - Document and test the dashboard's real TLS-terminated deployment path; keep the application from trusting client-supplied proxy identity headers.
 - Reject unauthenticated remote dashboard binds, classify unknown hostnames conservatively as remote, and disable browser caching of report/dashboard responses.

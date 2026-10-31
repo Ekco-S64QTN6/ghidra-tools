@@ -348,7 +348,7 @@ that reads only from that container.
 
 | Script | Flag | What it does |
 |:--|:--|:--|
-| `firmware_carver.py` | `--carve` | Memory-mapped scan and bounded extraction of SquashFS, CRAMFS, JFFS2 nodes, U-Boot uImage, GZIP streams, and embedded ELF. Nested GZIP output is rescanned recursively; extracted sub-images are left for a separate analysis invocation. |
+| `firmware_carver.py` | `--carve` | Memory-mapped scan and bounded extraction of SquashFS, CRAMFS, CRC-validated JFFS2 inode/directory-entry nodes, CRC-validated U-Boot uImage, GZIP streams, and embedded ELF. Nested GZIP output is rescanned recursively; extracted sub-images are left for a separate analysis invocation. |
 | `svd_injector.py` | `--svd` | Parses vendor CMSIS-SVD XML into peripheral base addresses, register offsets and IRQ vectors for bare-metal ARM Cortex-M / MIPS. |
 | `capability_engine.py` | `--rules` | Evaluates strict v1.0.0 YAML rules with file-aggregate and API-only function scopes, AND/OR/NOT and N-of-M logic; exact API matching, not capa-compatible. |
 | `trace_correlator.py` | `--trace` | Correlates a CAPE/DRAKVUF sandbox trace against the static import set using a sliding call window, so multi-step behaviours (alloc → write → create thread) match as one capability. |
@@ -380,7 +380,13 @@ GHIDRA_CARVE_MAX_TOTAL_BYTES=536870912 \
 ```
 
 Invalid, non-finite, zero, or negative limits are rejected. GZIP streams that exceed the
-expansion ratio or contain truncated/invalid trailers are not extracted.
+expansion ratio or contain truncated/invalid trailers are not extracted. Legacy U-Boot
+uImages are carved only when both CRC-32 checks pass: the header checksum over all 64
+header bytes with the header-CRC field zeroed, and the payload checksum over exactly
+the declared payload length. Invalid checksums are reported and the image is not carved.
+JFFS2 carving is limited to INODE and DIRENT nodes: it verifies the common header CRC,
+node CRC, and the inode compressed-data or directory-entry name CRC. Other JFFS2 node
+types are not currently claimed as checksum-validated or carved.
 SquashFS and CRAMFS are carved as opaque filesystem images; this tool does not
 yet recursively parse their internal filesystems or UBI volumes, and it does
 not claim zlib-stream extraction.
