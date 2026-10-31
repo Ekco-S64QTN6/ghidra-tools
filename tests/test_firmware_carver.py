@@ -84,8 +84,6 @@ def make_jffs2_dirent(name=b"kernel", endian=">"):
     return bytes(header) + name + (b"\xFF" * (padded_size - total_size))
 
 
-
-
 def make_squashfs(endian="<", major=4, minor=0, bytes_used=96,
                   block_size=131072, block_log=17, root_inode=0):
     header = bytearray(96)
@@ -274,7 +272,7 @@ class FilesystemSuperblockTests(unittest.TestCase):
         invalid_squash[4:8] = b"\x00\x00\x00\x00"
         valid_cram = make_cramfs(">")
         invalid_cram = bytearray(make_cramfs(">"))
-        invalid_cram[16:32] = b"not a cramfs hdr!"
+        invalid_cram[16:32] = b"bad signature!!!"
         with tempfile.NamedTemporaryFile(prefix="filesystem-superblocks-") as handle:
             handle.write(
                 valid_squash + bytes(invalid_squash)
