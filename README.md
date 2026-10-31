@@ -388,9 +388,13 @@ JFFS2 carving is limited to INODE and DIRENT nodes: it verifies the common heade
 node CRC, and the inode compressed-data or directory-entry name CRC using Linux's raw
 crc32_le seed-0 convention. Other JFFS2 node types are not currently claimed as
 checksum-validated or carved.
-SquashFS and CRAMFS are carved as opaque filesystem images; this tool does not
-yet recursively parse their internal filesystems or UBI volumes, and it does
-not claim zlib-stream extraction.
+SquashFS v3/v4 superblocks are validated in both byte orders, including filesystem
+bounds, block geometry, version, and root-metadata offset. CRAMFS v2 superblocks are
+validated in both byte orders, including the bounded size field, supported feature
+flags, signature policy, root directory inode, and root-data offset. Both formats
+are still carved as opaque filesystem images: internal files are not extracted,
+the complete CRAMFS image CRC is not verified, and UBI/zlib-stream extraction is
+not implemented.
 
 ### Format support
 
