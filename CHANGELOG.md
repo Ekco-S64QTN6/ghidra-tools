@@ -5,6 +5,7 @@ All notable changes to this project are documented here.
 ## [Unreleased]
 
 ### Added
+- Add mmap-backed firmware scanning and bounded recursive GZIP extraction with configurable depth, file-count, file-size, aggregate-size, expansion-ratio, and wall-time limits; retain source/parent provenance and stream output through temporary files.
 - Add an opt-in Caddy HTTPS reverse-proxy profile for Docker Compose, with automatic certificate management, unchanged Basic-auth forwarding, defensive forwarding-header handling, and a live TLS integration test.
 - Require a 32-byte environment token and HTTP Basic authentication for non-loopback dashboard binds; protect the UI, APIs, and report artifacts while keeping loopback use simple.
 - Recover stack strings only from contiguous immediate P-code stores to verified stack-frame write references; expose method and offset provenance in JSON, with a real-Ghidra positive fixture plus register-immediate, register-derived, and non-contiguous stack-store false-positive controls.
@@ -18,6 +19,7 @@ All notable changes to this project are documented here.
 - Preserve detector evidence, recommended and explicitly requested processor IDs, requested loaders, import strategy, and ELF flags in an additive optional JSON `detection` object; assert the provenance against real PE/ELF reports.
 
 ### Fixed
+- Reject corrupt/truncated GZIP members and remove partial decompression outputs; correct firmware-carving claims to exclude unimplemented UBI and zlib-stream extraction.
 - Document and test the dashboard's real TLS-terminated deployment path; keep the application from trusting client-supplied proxy identity headers.
 - Reject unauthenticated remote dashboard binds, classify unknown hostnames conservatively as remote, and disable browser caching of report/dashboard responses.
 - Match a Ghidra stack STORE input to its defining output in the same instruction's P-code array (rather than relying on the unpopulated `Varnode.getDef()` link), and accept only one direct `COPY` from a same-sized constant; register-derived stack stores remain rejected.

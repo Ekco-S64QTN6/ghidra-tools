@@ -348,12 +348,42 @@ that reads only from that container.
 
 | Script | Flag | What it does |
 |:--|:--|:--|
-| `firmware_carver.py` | `--carve` | Recursive container carving with format-compliant end-offset math — SquashFS, CRAMFS, JFFS2, U-Boot uImage, gzip/zlib. Runs *before* Ghidra so each sub-image can be analyzed on its own. |
+| `firmware_carver.py` | `--carve` | Memory-mapped scan and bounded extraction of SquashFS, CRAMFS, JFFS2 nodes, U-Boot uImage, GZIP streams, and embedded ELF. Nested GZIP output is rescanned recursively; extracted sub-images are left for a separate analysis invocation. |
 | `svd_injector.py` | `--svd` | Parses vendor CMSIS-SVD XML into peripheral base addresses, register offsets and IRQ vectors for bare-metal ARM Cortex-M / MIPS. |
 | `capability_engine.py` | `--rules` | Evaluates strict v1.0.0 YAML rules with file-aggregate and API-only function scopes, AND/OR/NOT and N-of-M logic; exact API matching, not capa-compatible. |
 | `trace_correlator.py` | `--trace` | Correlates a CAPE/DRAKVUF sandbox trace against the static import set using a sliding call window, so multi-step behaviours (alloc → write → create thread) match as one capability. |
 | `index_report.py` | *(automatic)* | Indexes each completed JSON report path into `output/reports.db`; separate runs and same-basename inputs remain distinct. Search combines SQLite `LIKE` matches on metadata/APIs/IOCs/indicators with FTS5 search across recovered text, symbols/functions, exports, rules, capabilities, and findings. |
 | `dashboard.py` | `--dashboard` | Standalone `http.server` UI + REST API. Loopback by default; `GHIDRA_DASHBOARD_HOST` opts into another bind address. |
+
+### Firmware carving limits
+
+The firmware carver uses conservative defaults and accepts overrides through
+environment variables. The limits apply to the `--carve` scan and extraction
+passes; the recursive extraction deadline covers the root and all nested
+rescans. `max_files` counts both raw carved artifacts and decompressed outputs.
+
+| Variable | Default | Meaning |
+|:--|--:|:--|
+| `GHIDRA_CARVE_MAX_DEPTH` | `3` | Maximum nested GZIP rescan depth (root is depth 0) |
+| `GHIDRA_CARVE_MAX_FILES` | `128` | Maximum artifacts written per extraction |
+| `GHIDRA_CARVE_MAX_FILE_BYTES` | `67108864` | Maximum size of one raw or expanded artifact (64 MiB) |
+| `GHIDRA_CARVE_MAX_TOTAL_BYTES` | `268435456` | Maximum aggregate bytes written (256 MiB) |
+| `GHIDRA_CARVE_MAX_COMPRESSION_RATIO` | `100` | Maximum expanded-to-compressed byte ratio |
+| `GHIDRA_CARVE_TIMEOUT_SECONDS` | `30` | Wall-time budget for each scan or extraction operation |
+
+Example for a larger, reviewed image:
+
+```bash
+GHIDRA_CARVE_MAX_DEPTH=4 \
+GHIDRA_CARVE_MAX_TOTAL_BYTES=536870912 \
+./ghidra-report.sh --carve firmware.bin
+```
+
+Invalid, non-finite, zero, or negative limits are rejected. GZIP streams that exceed the
+expansion ratio or contain truncated/invalid trailers are not extracted.
+SquashFS and CRAMFS are carved as opaque filesystem images; this tool does not
+yet recursively parse their internal filesystems or UBI volumes, and it does
+not claim zlib-stream extraction.
 
 ### Format support
 
@@ -505,6 +535,7 @@ python3 tests/test_history_indexer.py
 python3 tests/test_capability_engine.py
 ```
 
+The firmware-carver regressions exercise memory-mapped scanning, recursive nested GZIP extraction, depth/file/byte/ratio/time limits, truncated trailers, and U-Boot bounds. They do not validate internal SquashFS/CRAMFS/UBI extraction.
 The launcher regression test mocks the Ghidra commands and checks standard and
 Flatpak invocation plus invalid `JAVA_HOME`. The dashboard security tests start a
 local HTTP server and cover path traversal, symlink escapes, escaped HTML values,
