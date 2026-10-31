@@ -204,9 +204,10 @@ class Jffs2IntegrityTests(unittest.TestCase):
         self.assertIsNone(firmware_carver.parse_jffs2(data, 0))
 
     def test_inode_rejects_compressed_size_length_mismatch(self):
-        self.assertIsNone(firmware_carver.parse_jffs2(
-            make_jffs2_inode(b"short", csize=6), 0
-        ))
+        data = bytearray(make_jffs2_inode(b"short"))
+        struct.pack_into("<I", data, 4, 68 + 1)
+        struct.pack_into("<I", data, 8, jffs2_crc32(data[:8]))
+        self.assertIsNone(firmware_carver.parse_jffs2(data, 0))
 
     def test_inode_rejects_truncated_padded_node(self):
         data = make_jffs2_inode(b"short")
@@ -243,7 +244,7 @@ class Jffs2IntegrityTests(unittest.TestCase):
     def test_dirent_rejects_inconsistent_name_length(self):
         data = bytearray(make_jffs2_dirent(b"long-name"))
         struct.pack_into(">I", data, 4, 40 + 2)
-        struct.pack_into(">I", data, 8, zlib.crc32(data[:8]) & 0xFFFFFFFF)
+        struct.pack_into(">I", data, 8, jffs2_crc32(data[:8]))
         self.assertIsNone(firmware_carver.parse_jffs2(data, 0))
 
     def test_scanner_reports_only_valid_jffs2_inode_nodes(self):
