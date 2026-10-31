@@ -9,6 +9,7 @@ import struct
 import sys
 import tempfile
 import unittest
+import zlib
 from unittest.mock import patch
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -20,24 +21,25 @@ UIMAGE_MAGIC = 0x27051956
 
 
 def make_uimage(declared_size, payload=b"", name=b"synthetic-test", compression=0):
-    header = struct.pack(
+    header = bytearray(struct.pack(
         ">IIIIIIIBBBB32s",
         UIMAGE_MAGIC,
-        0,              # header CRC (not checked by this targeted regression)
+        0,              # header CRC is calculated after the header is complete
         1700000000,
         declared_size,
         0,              # load address
         0,              # entry point
-        0,              # data CRC
+        zlib.crc32(payload) & 0xFFFFFFFF,
         5,              # Linux
         1,              # ARM
         2,              # kernel
         compression,    # U-Boot compression ID
         name[:31].ljust(31, b"\x00") + b"\x00",
-    )
+    ))
     if len(header) != 64:
         raise AssertionError("synthetic uImage header must be 64 bytes")
-    return header + payload
+    struct.pack_into(">I", header, 4, zlib.crc32(header) & 0xFFFFFFFF)
+    return bytes(header) + payload
 
 
 class UImageBoundsTests(unittest.TestCase):
@@ -49,10 +51,35 @@ class UImageBoundsTests(unittest.TestCase):
         self.assertEqual(found["offset"], len(b"prefix"))
         self.assertEqual(found["payload_size"], len(payload))
         self.assertEqual(found["total_size"], 64 + len(payload))
+        self.assertTrue(found["header_crc32"].startswith("0x"))
+        self.assertTrue(found["data_crc32"].startswith("0x"))
 
     def test_declared_payload_larger_than_remaining_bytes_is_rejected(self):
         data = make_uimage(100, b"short")
         self.assertIsNone(firmware_carver.parse_uimage(data, 0))
+
+    def test_rejects_corrupt_header_crc(self):
+        data = bytearray(make_uimage(16, b"firmware-payload"))
+        data[16] ^= 0x01  # change load address without updating ih_hcrc
+        self.assertIsNone(firmware_carver.parse_uimage(data, 0))
+
+    def test_rejects_corrupt_payload_crc(self):
+        data = bytearray(make_uimage(16, b"firmware-payload"))
+        data[-1] ^= 0x01  # payload no longer matches ih_dcrc
+        self.assertIsNone(firmware_carver.parse_uimage(data, 0))
+
+    def test_scan_warns_and_ignores_bad_uimage_payload_crc(self):
+        data = bytearray(make_uimage(16, b"firmware-payload"))
+        data[-1] ^= 0x01
+        with tempfile.NamedTemporaryFile(prefix="uimage-bad-crc-", suffix=".bin") as handle:
+            handle.write(data)
+            handle.flush()
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                findings = firmware_carver.scan_file(handle.name)
+
+        self.assertFalse(any(item.get("type") == "uimage" for item in findings))
+        self.assertIn("header or payload CRC-32 mismatch", stderr.getvalue())
 
     def test_parser_rejects_negative_and_out_of_range_offsets(self):
         data = make_uimage(0)

@@ -119,10 +119,10 @@ def _check_deadline(deadline):
         raise CarveBudgetExceeded("wall-time budget exceeded")
 
 
-def parse_uimage(data, offset):
+def parse_uimage(data, offset, deadline=None):
     if offset < 0 or len(data) - offset < 64:
         return None
-    hdr = data[offset:offset+64]
+    hdr = data[offset:offset + 64]
     magic, hcrc, tstamp, dsize, load, ep, dcrc, os_type, arch, img_type, comp = struct.unpack(">IIIIIIIBBBB", hdr[:32])
     if magic != 0x27051956:
         return None
@@ -131,6 +131,28 @@ def parse_uimage(data, offset):
     # payload does not fit entirely after the 64-byte header.
     available_payload = len(data) - offset - 64
     if dsize > available_payload:
+        return None
+
+    # U-Boot calculates ih_hcrc over the complete 64-byte header after
+    # setting ih_hcrc to zero. Keep this byte-for-byte compatible.
+    header_for_crc = bytearray(hdr)
+    struct.pack_into(">I", header_for_crc, 4, 0)
+    calculated_hcrc = zlib.crc32(header_for_crc) & 0xFFFFFFFF
+    if hcrc != calculated_hcrc:
+        return None
+
+    # ih_dcrc covers exactly ih_size bytes after the header. Process the
+    # payload in bounded chunks so scanning a large image never copies it all.
+    calculated_dcrc = 0
+    payload_cursor = offset + 64
+    payload_end = payload_cursor + dsize
+    while payload_cursor < payload_end:
+        _check_deadline(deadline)
+        chunk_end = min(payload_cursor + CHUNK_BYTES, payload_end)
+        calculated_dcrc = zlib.crc32(data[payload_cursor:chunk_end], calculated_dcrc)
+        payload_cursor = chunk_end
+    calculated_dcrc &= 0xFFFFFFFF
+    if dcrc != calculated_dcrc:
         return None
 
     name_bytes = hdr[32:64]
@@ -149,6 +171,8 @@ def parse_uimage(data, offset):
         "header_size": 64,
         "payload_size": dsize,
         "total_size": total_size,
+        "header_crc32": "0x%08X" % hcrc,
+        "data_crc32": "0x%08X" % dcrc,
         "os": os_map.get(os_type, "os_" + str(os_type)),
         "arch": arch_map.get(arch, "arch_" + str(arch)),
         "compression": comp_map.get(comp, "comp_" + str(comp)),
@@ -340,7 +364,7 @@ def scan_file(filepath, limits=None, deadline=None):
 
             # 1. U-Boot uImage
             if chunk == b"\x27\x05\x19\x56":
-                res = parse_uimage(data, i)
+                res = parse_uimage(data, i, deadline)
                 if res:
                     findings.append(res)
                     if len(findings) >= limits.max_files:
@@ -355,6 +379,13 @@ def scan_file(filepath, limits=None, deadline=None):
                             "[WARN] Ignoring truncated uImage at 0x%X: "
                             "header declares %d payload bytes, only %d remain."
                             % (i, declared_size, available_payload),
+                            file=sys.stderr,
+                        )
+                    else:
+                        print(
+                            "[WARN] Ignoring invalid uImage at 0x%X: "
+                            "header or payload CRC-32 mismatch."
+                            % i,
                             file=sys.stderr,
                         )
 
