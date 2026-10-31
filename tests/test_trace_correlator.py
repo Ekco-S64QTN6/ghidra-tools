@@ -92,6 +92,82 @@ class TraceCorrelatorTests(unittest.TestCase):
         self.assertEqual(result["dormant_apis"], ["DormantAPI"])
         self.assertEqual(result["hidden_dynamic_apis"], ["CreateRemoteThread"])
 
+    def test_complete_import_table_is_preferred_over_suspicious_subset(self):
+        static = {
+            "imports": [
+                {"function": "Sleep", "library": "KERNEL32.dll"},
+                {"function": "VirtualAlloc", "library": "KERNEL32.dll"},
+            ],
+            "suspicious_apis": [{"function": "TaggedOnly"}],
+        }
+        dynamic = {"calls": [
+            {"api": "KERNEL32.DLL!sleep", "process_id": 8},
+            {"api": "GetProcAddress", "process_id": 8},
+        ]}
+        result = trace_correlator.correlate_static_and_dynamic(static, dynamic)
+        self.assertTrue(result["static_imports_complete"])
+        self.assertEqual(result["static_import_source"], "imports")
+        self.assertEqual(result["unique_static_imports"], 2)
+        self.assertEqual(result["confirmed_apis"], ["Sleep"])
+        self.assertEqual(result["dormant_apis"], ["VirtualAlloc"])
+        self.assertEqual(result["not_in_static_imports"], ["GetProcAddress"])
+        self.assertEqual(result["hidden_dynamic_apis"], result["not_in_static_imports"])
+
+    def test_explicit_empty_import_table_does_not_fall_back_to_legacy_subset(self):
+        result = trace_correlator.correlate_static_and_dynamic(
+            {"imports": [], "suspicious_apis": [{"function": "LegacyTagged"}]},
+            {"calls": [{"api": "LegacyTagged"}]},
+        )
+        self.assertTrue(result["static_imports_complete"])
+        self.assertEqual(result["static_import_source"], "imports")
+        self.assertEqual(result["confirmed_apis"], [])
+        self.assertEqual(result["dormant_apis"], [])
+        self.assertEqual(result["not_in_static_imports"], ["LegacyTagged"])
+
+    def test_legacy_report_falls_back_to_suspicious_apis_and_marks_incomplete(self):
+        result = trace_correlator.correlate_static_and_dynamic(
+            {"suspicious_apis": [{"function": "TaggedAPI"}]},
+            {"calls": [{"api": "TaggedAPI", "process_id": 1}]},
+        )
+        self.assertFalse(result["static_imports_complete"])
+        self.assertEqual(result["static_import_source"], "suspicious_apis_legacy")
+        self.assertEqual(result["confirmed_apis"], ["TaggedAPI"])
+
+    def test_attack_chain_requires_exact_api_names(self):
+        calls = [
+            {"api": "NotVirtualAllocEx", "process_id": 10},
+            {"api": "WriteProcessMemory", "process_id": 10},
+            {"api": "CreateRemoteThread", "process_id": 10},
+        ]
+        self.assertEqual(trace_correlator.match_sliding_chains(calls), [])
+
+    def test_attack_chain_requires_identified_process_id(self):
+        calls = [
+            {"api": "VirtualAllocEx", "process_name": "same.exe"},
+            {"api": "WriteProcessMemory", "process_name": "same.exe"},
+            {"api": "CreateRemoteThread", "process_name": "same.exe"},
+        ]
+        self.assertEqual(trace_correlator.match_sliding_chains(calls), [])
+
+    def test_attack_chain_evidence_includes_exact_event_slice(self):
+        calls = [
+            {"api": "KERNEL32!virtualallocex", "process_id": 42, "time": 1, "thread_id": 7},
+            {"api": "Sleep", "process_id": 42, "time": 2, "thread_id": 7},
+            {"api": "WriteProcessMemory", "process_id": 42, "time": 3, "arguments": {"size": 128}},
+            {"api": "CreateRemoteThread", "process_id": 42, "time": 4, "thread_id": 9},
+        ]
+        matches = trace_correlator.match_sliding_chains(calls)
+        match = next(item for item in matches if item["name"] == "Classic Process Injection")
+        self.assertEqual(match["process_id"], 42)
+        self.assertEqual(match["start_call_index"], 0)
+        self.assertEqual(match["end_call_index"], 3)
+        self.assertEqual(
+            [event["api"] for event in match["evidence_calls"]],
+            ["KERNEL32!virtualallocex", "WriteProcessMemory", "CreateRemoteThread"],
+        )
+        self.assertEqual(match["evidence_calls"][1]["arguments"], {"size": 128})
+        self.assertEqual(match["evidence_calls"][2]["thread_id"], 9)
+
     def test_attack_chain_cannot_be_joined_across_processes(self):
         calls = [
             {"api": "VirtualAllocEx", "process_id": 10},

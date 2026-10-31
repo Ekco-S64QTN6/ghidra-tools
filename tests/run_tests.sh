@@ -106,6 +106,27 @@ else
     log_fail "PE detector/import provenance verification failed"
 fi
 
+# Verify that report-v1 exports every static import, not only the heuristic-tagged subset.
+if python3 - "$REP_DIR/report_latest.json" <<'PYIMPORTS'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    report = json.load(handle)
+imports = report.get("imports")
+assert isinstance(imports, list) and imports, "complete imports array is missing"
+import_names = {item.get("function") for item in imports}
+suspicious_names = {item.get("function") for item in report.get("suspicious_apis", [])}
+assert {"GetModuleHandleA", "VirtualAlloc", "GetTickCount"} <= import_names, import_names
+assert "GetTickCount" not in suspicious_names, suspicious_names
+assert suspicious_names <= import_names, (suspicious_names, import_names)
+PYIMPORTS
+then
+    log_pass "JSON report exports the complete static import table separately from suspicious API tags"
+else
+    log_fail "Complete static import table was missing, incomplete, or conflated with suspicious API tags"
+fi
+
 # Verify that Ghidra records suspicious API call sites under their actual caller function.
 if python3 - "$REP_DIR/report_latest.json" <<'PYFUNCTION'
 import json
