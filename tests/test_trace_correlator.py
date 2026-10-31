@@ -149,6 +149,23 @@ class TraceCorrelatorTests(unittest.TestCase):
         ]
         self.assertEqual(trace_correlator.match_sliding_chains(calls), [])
 
+    def test_malformed_process_id_cannot_join_events(self):
+        calls = [
+            {"api": "VirtualAllocEx", "process_id": {"pid": 10}},
+            {"api": "WriteProcessMemory", "process_id": {"pid": 10}},
+            {"api": "CreateRemoteThread", "process_id": {"pid": 10}},
+        ]
+        self.assertEqual(trace_correlator.match_sliding_chains(calls), [])
+
+    def test_null_api_names_are_ignored(self):
+        result = trace_correlator.correlate_static_and_dynamic(
+            {"imports": [{"function": "Sleep", "library": "KERNEL32.dll"}]},
+            {"calls": [{"api": None}, {"api": ""}]},
+        )
+        self.assertEqual(result["unique_dynamic_apis"], 0)
+        self.assertEqual(result["confirmed_apis"], [])
+        self.assertEqual(result["not_in_static_imports"], [])
+
     def test_attack_chain_evidence_includes_exact_event_slice(self):
         calls = [
             {"api": "KERNEL32!virtualallocex", "process_id": 42, "time": 1, "thread_id": 7},
@@ -161,6 +178,7 @@ class TraceCorrelatorTests(unittest.TestCase):
         self.assertEqual(match["process_id"], 42)
         self.assertEqual(match["start_call_index"], 0)
         self.assertEqual(match["end_call_index"], 3)
+        self.assertEqual(match["evidence_call_indices"], [0, 2, 3])
         self.assertEqual(
             [event["api"] for event in match["evidence_calls"]],
             ["KERNEL32!virtualallocex", "WriteProcessMemory", "CreateRemoteThread"],

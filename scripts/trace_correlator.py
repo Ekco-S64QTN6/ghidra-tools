@@ -170,7 +170,7 @@ def _process_id(call):
     if not isinstance(call, dict):
         return None
     value = call.get("process_id")
-    if value is None or value == "":
+    if isinstance(value, bool) or not isinstance(value, (str, int)) or value == "":
         return None
     return value
 
@@ -223,6 +223,7 @@ def match_sliding_chains(calls, window_size=10):
                     "process_id": process_id,
                     "start_call_index": evidence_indices[0],
                     "end_call_index": evidence_indices[-1],
+                    "evidence_call_indices": list(evidence_indices),
                     "evidence_calls": [
                         dict(calls[index]) for index in evidence_indices
                     ],
@@ -270,7 +271,10 @@ def correlate_static_and_dynamic(static_data, dynamic_data):
     for call in dynamic_calls:
         if not isinstance(call, dict):
             continue
-        api = str(call.get("api", "")).strip()
+        raw_api = call.get("api")
+        if raw_api is None:
+            continue
+        api = str(raw_api).strip()
         key = _api_key(api)
         if key:
             dynamic_by_key.setdefault(key, api)
@@ -372,8 +376,10 @@ def main():
         chains = match_sliding_chains(trace_data["calls"])
         print(f"Total dynamic calls: {len(trace_data['calls'])}")
         print(f"Matched attack chains: {len(chains)}")
-        for ch in chains:
-            print(f"  - [{ch['technique']}] {ch['name']}: {' -> '.join(ch['sequence'])}")
+        for chain in chains:
+            print(f"  - [{chain['technique']}] {chain['name']} (PID {chain['process_id']}): {' -> '.join(chain['sequence'])}")
+            for index, event in zip(chain["evidence_call_indices"], chain["evidence_calls"]):
+                print(f"      #{index}: {event.get('api', '<unknown>')} (time={event.get('time', '')}, thread={event.get('thread_id', '')})")
         sys.exit(0)
 
     if not trace_file:

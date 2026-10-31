@@ -356,6 +356,8 @@ that reads only from that container.
 | `dashboard.py` | `--dashboard` | Standalone `http.server` UI + REST API. Loopback by default; `GHIDRA_DASHBOARD_HOST` opts into another bind address. |
 
 
+### Trace correlation
+
 Trace correlation uses the additive `imports` array in report-v1, which contains
 all external imports rather than only APIs tagged by the threat heuristics.
 Older report files without that field fall back to `suspicious_apis`; the JSON
