@@ -66,6 +66,8 @@ def run():
 
     proxy_port = free_tcp_port()
     container_name = "ghidra-dashboard-caddy-test-" + secrets.token_hex(4)
+    data_volume = container_name + "-data"
+    config_volume = container_name + "-config"
     temporary = tempfile.TemporaryDirectory(prefix="ghidra-dashboard-caddy-")
     temp_path = pathlib.Path(temporary.name)
     root_cert = temp_path / "caddy-local-root.crt"
@@ -91,10 +93,8 @@ def run():
             raise AssertionError("Could not substitute the test dashboard upstream.")
         config_path = temp_path / "Caddyfile"
         config_path.write_text(test_config, encoding="utf-8")
-        data_path = temp_path / "data"
-        config_state_path = temp_path / "config"
-        data_path.mkdir()
-        config_state_path.mkdir()
+        docker_output([docker, "volume", "create", data_volume])
+        docker_output([docker, "volume", "create", config_volume])
 
         docker_output([
             docker, "run", "--detach", "--name", container_name,
@@ -102,8 +102,8 @@ def run():
             "--publish", f"127.0.0.1:{proxy_port}:443",
             "--env", "DASHBOARD_DOMAIN=localhost",
             "--volume", f"{config_path}:/etc/caddy/Caddyfile:ro",
-            "--volume", f"{data_path}:/data",
-            "--volume", f"{config_state_path}:/config",
+            "--volume", f"{data_volume}:/data",
+            "--volume", f"{config_volume}:/config",
             CADDY_IMAGE,
         ], timeout=180)
 
@@ -186,6 +186,12 @@ def run():
     finally:
         subprocess.run(
             [docker, "rm", "--force", container_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=20,
+        )
+        subprocess.run(
+            [docker, "volume", "rm", "--force", data_volume, config_volume],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             timeout=20,
