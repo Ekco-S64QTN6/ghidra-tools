@@ -84,6 +84,209 @@ def make_jffs2_dirent(name=b"kernel", endian=">"):
     return bytes(header) + name + (b"\xFF" * (padded_size - total_size))
 
 
+def make_squashfs(endian="<", major=4, minor=0, bytes_used=96,
+                  block_size=131072, block_log=17, root_inode=0):
+    header = bytearray(96)
+    struct.pack_into(endian + "I", header, 0, 0x73717368)
+    struct.pack_into(
+        endian + "IIIIHHHHHH", header, 4,
+        1, 1700000000, block_size, 0, 1, block_log, 0, 1, major, minor,
+    )
+    struct.pack_into(endian + "Q", header, 32, root_inode)
+    struct.pack_into(endian + "Q", header, 40, bytes_used)
+    return bytes(header)
+
+
+def make_cramfs(endian="<", size=80, flags=0x00000003, root_offset=76,
+                signature=b"Compressed ROMFS", root_mode=0o40755):
+    header = bytearray(max(76, size))
+    struct.pack_into(endian + "IIII", header, 0, 0x28CD3D45, size, flags, 0)
+    header[16:32] = signature[:16].ljust(16, b"\x00")
+    struct.pack_into(endian + "IIII", header, 32, 0, 1, 1, 1)
+    header[48:64] = b"synthetic".ljust(16, b"\x00")
+    struct.pack_into(endian + "HH", header, 64, root_mode, 0)
+    if endian == "<":
+        root_word = ((root_offset >> 2) & 0x03FFFFFF) << 6
+    else:
+        root_word = (root_offset >> 2) & 0x03FFFFFF
+    struct.pack_into(endian + "I", header, 72, root_word)
+    return bytes(header)
+
+
+class FilesystemSuperblockTests(unittest.TestCase):
+    def test_squashfs_little_endian_superblock_is_parsed_at_embedded_offset(self):
+        prefix = b"firmware-prefix"
+        found = firmware_carver.parse_squashfs(
+            prefix + make_squashfs("<"), len(prefix)
+        )
+        self.assertIsNotNone(found)
+        self.assertEqual(found["offset"], len(prefix))
+        self.assertEqual(found["endian"], "little")
+        self.assertEqual(found["total_size"], 96)
+        self.assertEqual(found["block_size"], 131072)
+        self.assertEqual(found["root_inode_offset"], 0)
+
+    def test_squashfs_big_endian_superblock_is_parsed(self):
+        found = firmware_carver.parse_squashfs(make_squashfs(">"), 0)
+        self.assertIsNotNone(found)
+        self.assertEqual(found["endian"], "big")
+
+    def test_squashfs_version_3_1_is_retained(self):
+        found = firmware_carver.parse_squashfs(
+            make_squashfs("<", major=3, minor=1), 0
+        )
+        self.assertIsNotNone(found)
+        self.assertEqual(found["description"], "SquashFS v3.1 Filesystem")
+
+    def test_squashfs_rejects_nonstandard_magic_orders(self):
+        for magic in (b"shsq", b"qshs", b"xxxx"):
+            with self.subTest(magic=magic):
+                data = bytearray(make_squashfs("<"))
+                data[:4] = magic
+                self.assertIsNone(firmware_carver.parse_squashfs(data, 0))
+
+    def test_squashfs_rejects_superblock_size_outside_image(self):
+        self.assertIsNone(
+            firmware_carver.parse_squashfs(
+                make_squashfs("<", bytes_used=97), 0
+            )
+        )
+
+    def test_squashfs_rejects_too_small_declared_filesystem(self):
+        self.assertIsNone(
+            firmware_carver.parse_squashfs(
+                make_squashfs("<", bytes_used=95), 0
+            )
+        )
+
+    def test_squashfs_rejects_invalid_block_size_and_log(self):
+        cases = (
+            {"block_size": 2048, "block_log": 11},
+            {"block_size": 65535, "block_log": 16},
+            {"block_size": 1 << 21, "block_log": 21},
+        )
+        for fields in cases:
+            with self.subTest(fields=fields):
+                self.assertIsNone(
+                    firmware_carver.parse_squashfs(
+                        make_squashfs("<", **fields), 0
+                    )
+                )
+
+    def test_squashfs_rejects_invalid_root_metadata_offset(self):
+        self.assertIsNone(
+            firmware_carver.parse_squashfs(
+                make_squashfs("<", root_inode=8193), 0
+            )
+        )
+
+    def test_squashfs_rejects_unknown_major_version(self):
+        self.assertIsNone(
+            firmware_carver.parse_squashfs(
+                make_squashfs("<", major=5, minor=0), 0
+            )
+        )
+
+    def test_cramfs_little_endian_superblock_is_validated(self):
+        found = firmware_carver.parse_cramfs(make_cramfs("<"), 0)
+        self.assertIsNotNone(found)
+        self.assertEqual(found["endian"], "little")
+        self.assertEqual(found["total_size"], 80)
+        self.assertEqual(found["root_offset"], 76)
+        self.assertEqual(found["files"], 1)
+
+    def test_cramfs_big_endian_superblock_is_validated(self):
+        found = firmware_carver.parse_cramfs(make_cramfs(">"), 0)
+        self.assertIsNotNone(found)
+        self.assertEqual(found["endian"], "big")
+
+    def test_cramfs_accepts_shifted_root_offset_within_image(self):
+        found = firmware_carver.parse_cramfs(
+            make_cramfs("<", size=96, flags=0x00000401, root_offset=80), 0
+        )
+        self.assertIsNotNone(found)
+        self.assertEqual(found["root_offset"], 80)
+
+    def test_cramfs_allows_wrong_signature_only_with_flag(self):
+        found = firmware_carver.parse_cramfs(
+            make_cramfs("<", flags=0x00000201, signature=b"legacy vendor fs"), 0
+        )
+        self.assertIsNotNone(found)
+        self.assertIsNone(
+            firmware_carver.parse_cramfs(
+                make_cramfs("<", signature=b"legacy vendor fs"), 0
+            )
+        )
+
+    def test_cramfs_rejects_truncated_superblock(self):
+        self.assertIsNone(firmware_carver.parse_cramfs(make_cramfs("<")[:-1], 0))
+
+    def test_cramfs_rejects_size_outside_input_or_below_header(self):
+        self.assertIsNone(
+            firmware_carver.parse_cramfs(
+                make_cramfs("<", size=128)[:-20], 0
+            )
+        )
+        self.assertIsNone(
+            firmware_carver.parse_cramfs(make_cramfs("<", size=75), 0)
+        )
+
+    def test_cramfs_rejects_missing_bounded_size_flag(self):
+        self.assertIsNone(
+            firmware_carver.parse_cramfs(
+                make_cramfs("<", flags=0x00000002), 0
+            )
+        )
+
+    def test_cramfs_rejects_unsupported_flags(self):
+        self.assertIsNone(
+            firmware_carver.parse_cramfs(
+                make_cramfs("<", flags=0x00001001), 0
+            )
+        )
+
+    def test_cramfs_rejects_non_directory_root_inode(self):
+        self.assertIsNone(
+            firmware_carver.parse_cramfs(
+                make_cramfs("<", root_mode=0o100644), 0
+            )
+        )
+
+    def test_cramfs_rejects_root_offset_outside_image(self):
+        self.assertIsNone(
+            firmware_carver.parse_cramfs(
+                make_cramfs("<", size=80, root_offset=80), 0
+            )
+        )
+
+    def test_cramfs_rejects_nonstandard_root_offset_without_shift_flag(self):
+        self.assertIsNone(
+            firmware_carver.parse_cramfs(
+                make_cramfs("<", size=96, root_offset=80), 0
+            )
+        )
+
+    def test_scanner_reports_only_valid_squashfs_and_cramfs_superblocks(self):
+        valid_squash = make_squashfs("<")
+        invalid_squash = bytearray(make_squashfs("<"))
+        invalid_squash[4:8] = b"\x00\x00\x00\x00"
+        valid_cram = make_cramfs(">")
+        invalid_cram = bytearray(make_cramfs(">"))
+        invalid_cram[16:32] = b"bad signature!!!"
+        with tempfile.NamedTemporaryFile(prefix="filesystem-superblocks-") as handle:
+            handle.write(
+                valid_squash + bytes(invalid_squash)
+                + valid_cram + bytes(invalid_cram)
+            )
+            handle.flush()
+            findings = firmware_carver.scan_file(handle.name)
+
+        found_types = [item["type"] for item in findings]
+        self.assertEqual(found_types.count("squashfs"), 1)
+        self.assertEqual(found_types.count("cramfs"), 1)
+
+
+
 class UImageBoundsTests(unittest.TestCase):
     def test_valid_payload_size_is_preserved(self):
         payload = b"firmware-payload"
