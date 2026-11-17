@@ -1,6 +1,6 @@
 # Roadmap — ghidra-report
 
-**Status:** Active engineering backlog. The initial baseline was a static review of `main` on 2026-10-27; incremental progress notes record verified changes through 2026-10-30.  
+**Status:** Active engineering backlog. The initial baseline was a static review of `main` on 2026-10-27; incremental progress notes record verified changes through 2026-10-31, including complete-import trace correlation.  
 **Purpose:** Turn the current collection of useful analysis prototypes into a safer, reproducible, verifiable binary-triage pipeline.  
 **Planning rule:** Fix security and correctness before adding more detection features. This roadmap is ordered by risk and dependencies, not a promise of calendar dates.
 
